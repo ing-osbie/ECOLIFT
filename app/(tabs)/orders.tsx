@@ -1,13 +1,29 @@
+import { CustomAlert, useCustomAlert } from "@/components/custom-alert";
 import { GlassCard } from "@/components/glass-card";
 import { GradientBackground } from "@/components/gradient-background";
 import { Colors, getColors } from "@/constants/theme";
-import { Order, useApp } from "@/context/AppContext";
-import { Construction, Home, Recycle, Trash2 } from "lucide-react-native";
+import { useApp } from "@/context/AppContext";
+import { useRouter } from "expo-router";
+import {
+  ArrowRight,
+  Calendar,
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  MapPin,
+  Scale,
+  ShieldCheck,
+  Sparkles,
+  Truck,
+  X,
+} from "lucide-react-native";
 import React, { useState } from "react";
 import {
-  FlatList,
+  Dimensions,
+  Image,
+  Modal,
   Platform,
-  StatusBar,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -15,173 +31,291 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-type FilterType = "all" | "completed" | "cancelled";
+interface ImpactOrder {
+  id: string;
+  title: string;
+  weight: string;
+  date: string;
+  status: "Completed" | "Pending" | "Cancelled";
+  image: string;
+  pointsEarned: number;
+  co2Saved: string;
+  address: string;
+}
+
+const IMPACT_ORDERS: ImpactOrder[] = [
+  {
+    id: "ord-101",
+    title: "Mixed Recycling",
+    weight: "12.5 kg",
+    date: "Oct 24, 2023",
+    status: "Completed",
+    image:
+      "https://lh3.googleusercontent.com/aida-public/AB6AXuBK9e7LanzTjwQS0BZ8o3qyyapIOHrtYQfo65nB3TRj7wbY6I9FjSfkdNAdl6ssqiIPTvlPS4Hkl34Xk97S9tYJjnC39ZOcdGw6oxFbETyF0YlD1f_HSJVM2y_NHYzrVrYCXmPNKBB1n3udsbX57eBn2gbsKxzRAkaUGhR21PjT2x0w6FHkmbax8vA3zTgeZ22R13OHg7Jft_uSr6KCQWv1fU1SC9o3tRUTMc0bv6eZLRfdYFjCzOXM",
+    pointsEarned: 45,
+    co2Saved: "18.2 kg CO₂e",
+    address: "18 Kojo Thompson Road, Accra",
+  },
+  {
+    id: "ord-102",
+    title: "E-Waste Collection",
+    weight: "4.2 kg",
+    date: "Oct 10, 2023",
+    status: "Completed",
+    image:
+      "https://lh3.googleusercontent.com/aida-public/AB6AXuC55kch440C_nnUx90yOSMfpDsoaJJSIoIjGtG1fjPyqmPJWfGWYVPCxiI1JLHgW3Fxmx2iuvAFFhkoHldLTTmiDQNPX0CPhOtoudxznPO_g9PQDMCx6nVOQqxPNOVibIH0MGm8SZLvwbgu9l0P6CgWK2BfjDPjSx_W5saEIdExqQcwo1ATs30Xh4apUPuR8TkxHF0DnQNAXXrYtO17Hwkp6zdDynO6YP8rFGyWEoGsxTS9Syy6oAPk",
+    pointsEarned: 80,
+    co2Saved: "14.5 kg CO₂e",
+    address: "12 Ring Road Central, Accra",
+  },
+  {
+    id: "ord-103",
+    title: "Organic & Yard Waste",
+    weight: "28.0 kg",
+    date: "Sep 28, 2023",
+    status: "Completed",
+    image:
+      "https://lh3.googleusercontent.com/aida-public/AB6AXuCxO1AXrWNH-V7kXINgVN82U7al2Q2TT_iJ3Bmn19-LAnroO3WKvspb2rbvEeG-yp9zyLhP97Ii6QWrJizNgHSYdjGIi5FjMyFzqaSkOp-JvgVpyh90d2K2qCbZsacvhxQH_IXMVQwKR0BBQ6xRsKggzrzpAloL-PxsHbsNFal8_hBecyH3-QdJ3qyGBaRN7x4agL2Zd0CSVfTmzo1G4d9rvVPcQyxPUIOrg0fbrTXtOJDclXLRUdW-",
+    pointsEarned: 35,
+    co2Saved: "32.0 kg CO₂e",
+    address: "Block 4, Airport Residential Area, Accra",
+  },
+];
 
 export default function OrderHistory() {
-  const { orders, isDarkMode } = useApp();
+  const router = useRouter();
+  const { isDarkMode } = useApp();
   const C = getColors(isDarkMode);
-  const [filter, setFilter] = useState<FilterType>("all");
+  const { showAlert, alertProps } = useCustomAlert();
 
-  const filteredOrders = orders.filter((o) => {
-    if (filter === "completed") return o.status === "Completed";
-    if (filter === "cancelled") return o.status === "Cancelled";
-    return true;
-  });
-
-  const getWasteIcon = (type: string) => {
-    const size = 20;
-    const color = C.primary;
-    switch (type.toLowerCase()) {
-      case "household":
-        return <Home size={size} color={color} />;
-      case "commercial":
-        return <Trash2 size={size} color={color} />;
-      case "bulk/construction":
-        return <Construction size={size} color={color} />;
-      case "recyclables":
-        return <Recycle size={size} color={color} />;
-      default:
-        return <Trash2 size={size} color={color} />;
-    }
-  };
-
-  const renderOrderItem = ({ item }: { item: Order }) => {
-    const isCompleted = item.status === "Completed";
-
-    return (
-      <GlassCard style={styles.card}>
-        <View style={styles.cardHeader}>
-          <View style={styles.iconAndTitle}>
-            <View
-              style={[
-                styles.iconContainer,
-                {
-                  backgroundColor: isDarkMode
-                    ? "rgba(255,255,255,0.05)"
-                    : "rgba(11, 61, 46, 0.05)",
-                },
-              ]}
-            >
-              {getWasteIcon(item.wasteType)}
-            </View>
-            <View style={styles.titleContainer}>
-              <Text style={[styles.wasteTypeText, { color: C.text }]}>
-                {item.wasteType}
-              </Text>
-              <Text style={[styles.dateText, { color: C.greyText }]}>
-                {item.date}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.priceAndStatus}>
-            <Text style={[styles.priceText, { color: C.text }]}>
-              {item.price}
-            </Text>
-            <View
-              style={[
-                styles.statusPill,
-                isCompleted
-                  ? {
-                      backgroundColor: isDarkMode
-                        ? "rgba(182, 255, 60, 0.2)"
-                        : Colors.accent,
-                    }
-                  : {
-                      borderWidth: 1,
-                      borderColor: C.border,
-                      backgroundColor: "transparent",
-                    },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.statusText,
-                  isCompleted ? { color: C.primary } : { color: C.greyText },
-                ]}
-              >
-                {item.status}
-              </Text>
-            </View>
-          </View>
-        </View>
-      </GlassCard>
-    );
-  };
+  const [selectedOrder, setSelectedOrder] = useState<ImpactOrder | null>(null);
 
   return (
-    <GradientBackground style={styles.container}>
+    <View style={[styles.container, { backgroundColor: isDarkMode ? "#0E1412" : "#F9F9FF" }]}>
       <SafeAreaView style={styles.safeArea}>
-        {/* Header */}
+        {/* Top Header */}
         <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: C.text }]}>
-            Order History
-          </Text>
-          <Text style={[styles.headerSubtitle, { color: C.greyText }]}>
-            View all your past garbage requests
-          </Text>
+          <View style={styles.brandRow}>
+            <Text style={[styles.brandTitle, { color: isDarkMode ? "#95D3BA" : "#003527" }]}>
+              EcoLift
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => router.push("/(tabs)/profile" as any)}
+            style={styles.avatarBtn}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.headerProfileText, { color: C.greyText }]}>Profile</Text>
+            <Image
+              source={{
+                uri: "https://lh3.googleusercontent.com/aida/AP1WRLvvebFOZ6ynMsVwLT_RhMB47PIf8hxioUnplUngiLRck_uwziGuo8q9YO5aj1foVEUmhejlyafL2z2OHqEPi7FC8azbJoc-ziJbt6qsF5SMnw3GGseHcRNMOLhOvVO7v71vEGCzSy99We7_7rFyQI5Xzz2j4GcrsBMMWBjTRHPbwqUwGF-tolAZtlI0fp2FGa_-ATEKQMsHpKcZA_Q1cKK8GQq6hUUor6q0TpvsuD-ZBS35WmtkQvEqKtrn1A2MHmfBS2lh9XHmQQ",
+              }}
+              style={styles.avatarImage}
+            />
+          </TouchableOpacity>
         </View>
 
-        {/* Filter Chips */}
-        <View style={styles.filterRow}>
-          {(["all", "completed", "cancelled"] as FilterType[]).map((f) => {
-            const isActive = filter === f;
-            return (
-              <TouchableOpacity
-                key={f}
-                style={[
-                  styles.filterChip,
-                  isActive
-                    ? { backgroundColor: C.primary }
-                    : {
-                        backgroundColor: isDarkMode ? "#2C2C2E" : Colors.white,
-                        borderColor: C.border,
-                        borderWidth: 1,
-                      },
-                ]}
-                onPress={() => setFilter(f)}
-                activeOpacity={0.9}
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    isActive
-                      ? { color: isDarkMode ? "#000000" : "#FFFFFF" }
-                      : { color: C.greyText },
-                  ]}
-                >
-                  {f.charAt(0).toUpperCase() + f.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Scrollable list */}
-        <FlatList
-          data={filteredOrders}
-          keyExtractor={(item) => item.id}
-          renderItem={renderOrderItem}
-          contentContainerStyle={styles.listContainer}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Trash2
-                size={48}
-                color={C.greyText}
-                style={{ marginBottom: 12 }}
-              />
-              <Text style={[styles.emptyTitle, { color: C.text }]}>
-                No Pickups Found
-              </Text>
-              <Text style={[styles.emptySubtitle, { color: C.greyText }]}>
-                You have not requested any pickups under this filter yet.
-              </Text>
+        >
+          {/* Title and Subtitle */}
+          <View style={styles.titleSection}>
+            <Text style={[styles.headingTitle, { color: C.text }]}>Your Impact Log</Text>
+            <Text style={[styles.headingSub, { color: C.greyText }]}>
+              A record of your environmental contributions.
+            </Text>
+          </View>
+
+          {/* Impact Order Cards */}
+          <View style={styles.ordersList}>
+            {IMPACT_ORDERS.map((order) => (
+              <View
+                key={order.id}
+                style={[
+                  styles.orderCard,
+                  {
+                    backgroundColor: isDarkMode ? "#1A211E" : "#E7EEFE",
+                    borderColor: isDarkMode ? "#2B3530" : "#DCE2F3",
+                  },
+                ]}
+              >
+                {/* Hero Card Image */}
+                <View style={styles.cardImageWrapper}>
+                  <Image source={{ uri: order.image }} style={styles.cardImage} />
+
+                  {/* Verified Badge */}
+                  <View style={styles.verifiedBadge}>
+                    <CheckCircle2 size={14} color="#00714D" />
+                    <Text style={styles.verifiedText}>Verified</Text>
+                  </View>
+                </View>
+
+                {/* Card Content */}
+                <View style={styles.cardBody}>
+                  <View style={styles.cardHeaderRow}>
+                    <View>
+                      <Text style={[styles.statusText, { color: C.greyText }]}>
+                        {order.status.toUpperCase()}
+                      </Text>
+                      <Text style={[styles.cardTitle, { color: C.text }]}>
+                        {order.title}
+                      </Text>
+                    </View>
+
+                    <View style={styles.weightBadge}>
+                      <Text style={styles.weightText}>{order.weight}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.dateRow}>
+                    <Calendar size={16} color={C.greyText} />
+                    <Text style={[styles.dateText, { color: C.greyText }]}>
+                      {order.date}
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.viewDetailsBtn,
+                      {
+                        backgroundColor: isDarkMode ? "#141A17" : "#FFFFFF",
+                        borderColor: isDarkMode ? "#2B3530" : "#BFC9C3",
+                      },
+                    ]}
+                    onPress={() => setSelectedOrder(order)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.viewDetailsText, { color: isDarkMode ? "#95D3BA" : "#003527" }]}>
+                      View Details
+                    </Text>
+                    <ArrowRight size={16} color={isDarkMode ? "#95D3BA" : "#003527"} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          {/* Lifetime Impact Mini-Dashboard */}
+          <View style={styles.lifetimeImpactCard}>
+            <Text style={styles.lifetimeTitle}>Lifetime Impact</Text>
+            <View style={styles.lifetimeStatsRow}>
+              <View style={styles.lifetimeStatBox}>
+                <Scale size={20} color="#B0F0D6" style={{ marginBottom: 4 }} />
+                <Text style={styles.lifetimeStatNum}>44.7</Text>
+                <Text style={styles.lifetimeStatLabel}>KG DIVERTED</Text>
+              </View>
+
+              <View style={styles.lifetimeStatBox}>
+                <Truck size={20} color="#B0F0D6" style={{ marginBottom: 4 }} />
+                <Text style={styles.lifetimeStatNum}>12</Text>
+                <Text style={styles.lifetimeStatLabel}>PICKUPS</Text>
+              </View>
             </View>
-          }
-        />
+          </View>
+        </ScrollView>
+
+        {/* Order Details Modal */}
+        <Modal
+          visible={!!selectedOrder}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setSelectedOrder(null)}
+        >
+          <View style={styles.modalBackdrop}>
+            <View
+              style={[
+                styles.modalCard,
+                { backgroundColor: isDarkMode ? "#141A17" : "#FFFFFF" },
+              ]}
+            >
+              {selectedOrder && (
+                <>
+                  <Image
+                    source={{ uri: selectedOrder.image }}
+                    style={styles.modalHeaderImage}
+                  />
+
+                  <View style={styles.modalBody}>
+                    <View style={styles.modalTopRow}>
+                      <View>
+                        <Text style={[styles.modalOrderTitle, { color: C.text }]}>
+                          {selectedOrder.title}
+                        </Text>
+                        <Text style={[styles.modalOrderDate, { color: C.greyText }]}>
+                          {selectedOrder.date} • {selectedOrder.weight}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => setSelectedOrder(null)}
+                        style={styles.modalCloseBtn}
+                      >
+                        <X size={20} color={C.text} />
+                      </TouchableOpacity>
+                    </View>
+
+                    <View
+                      style={[
+                        styles.modalInfoCard,
+                        {
+                          backgroundColor: isDarkMode ? "#1C2420" : "#F0F3FF",
+                          borderColor: isDarkMode ? "#2B3530" : "#DCE2F3",
+                        },
+                      ]}
+                    >
+                      <View style={styles.modalInfoRow}>
+                        <Text style={[styles.modalInfoLabel, { color: C.greyText }]}>
+                          CO₂ Diverted:
+                        </Text>
+                        <Text style={[styles.modalInfoValue, { color: "#006C49" }]}>
+                          {selectedOrder.co2Saved}
+                        </Text>
+                      </View>
+
+                      <View style={styles.modalInfoRow}>
+                        <Text style={[styles.modalInfoLabel, { color: C.greyText }]}>
+                          Eco-Points Earned:
+                        </Text>
+                        <Text style={[styles.modalInfoValue, { color: "#006C49" }]}>
+                          +{selectedOrder.pointsEarned} Pts
+                        </Text>
+                      </View>
+
+                      <View style={styles.modalInfoRow}>
+                        <Text style={[styles.modalInfoLabel, { color: C.greyText }]}>
+                          Location:
+                        </Text>
+                        <Text
+                          style={[styles.modalInfoValue, { color: C.text, flex: 1, textAlign: "right" }]}
+                        >
+                          {selectedOrder.address}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <TouchableOpacity
+                      style={[styles.modalDoneBtn, { backgroundColor: "#003527" }]}
+                      onPress={() => {
+                        setSelectedOrder(null);
+                        showAlert({
+                          type: "success",
+                          title: "Receipt Sent",
+                          message: "Your recycling impact certificate has been sent to your email.",
+                        });
+                      }}
+                      activeOpacity={0.9}
+                    >
+                      <Text style={styles.modalDoneBtnText}>Download Receipt</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
-    </GradientBackground>
+      <CustomAlert {...alertProps} />
+    </View>
   );
 }
 
@@ -191,123 +325,255 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
   },
   header: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    marginBottom: 20,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontFamily: "Poppins-Bold",
-    color: Colors.textDark,
-    letterSpacing: -0.5,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    fontFamily: "Poppins-Medium",
-    color: Colors.greyText,
-    marginTop: 2,
-  },
-  filterRow: {
-    flexDirection: "row",
-    paddingHorizontal: 24,
-    gap: 8,
-    marginBottom: 16,
-  },
-  filterChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(11, 61, 46, 0.05)",
-    shadowColor: Colors.shadowColor,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  filterChipText: {
-    fontSize: 13,
-    fontFamily: "Poppins-Bold",
-  },
-  listContainer: {
-    paddingHorizontal: 24,
-    paddingBottom: 110, // Ensure bottom tab doesn't overlap
-    gap: 12,
-  },
-  card: {
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-  },
-  cardHeader: {
+    height: 56,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    paddingHorizontal: 20,
   },
-  iconAndTitle: {
+  brandRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
   },
-  iconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: "rgba(11, 61, 46, 0.04)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  titleContainer: {
-    justifyContent: "center",
-  },
-  wasteTypeText: {
-    fontSize: 15,
+  brandTitle: {
+    fontSize: 24,
     fontFamily: "Poppins-Bold",
-    color: Colors.textDark,
+    letterSpacing: -0.5,
+  },
+  avatarBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  headerProfileText: {
+    fontSize: 13,
+    fontFamily: "Poppins-Medium",
+  },
+  avatarImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#95D3BA",
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 110,
+    gap: 16,
+  },
+  titleSection: {
+    marginTop: 4,
+  },
+  headingTitle: {
+    fontSize: 26,
+    fontFamily: "Poppins-Bold",
+    letterSpacing: -0.5,
+  },
+  headingSub: {
+    fontSize: 13,
+    fontFamily: "Poppins-Medium",
+    marginTop: 2,
+  },
+  ordersList: {
+    gap: 18,
+  },
+  orderCard: {
+    borderRadius: 20,
+    overflow: "hidden",
+    borderWidth: 1,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  cardImageWrapper: {
+    width: "100%",
+    height: 170,
+    position: "relative",
+  },
+  cardImage: {
+    width: "100%",
+    height: "100%",
+  },
+  verifiedBadge: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(108, 248, 187, 0.92)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    gap: 5,
+  },
+  verifiedText: {
+    fontSize: 11,
+    fontFamily: "Poppins-Bold",
+    color: "#00714D",
+  },
+  cardBody: {
+    padding: 16,
+    gap: 10,
+  },
+  cardHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  statusText: {
+    fontSize: 11,
+    fontFamily: "Poppins-Bold",
+    letterSpacing: 0.5,
+  },
+  cardTitle: {
+    fontSize: 17,
+    fontFamily: "Poppins-Bold",
+    marginTop: 2,
+  },
+  weightBadge: {
+    backgroundColor: "#064E3B",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 14,
+  },
+  weightText: {
+    color: "#80BEA6",
+    fontSize: 12,
+    fontFamily: "Poppins-Bold",
+  },
+  dateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   dateText: {
     fontSize: 12,
     fontFamily: "Poppins-Medium",
-    color: Colors.greyText,
-    marginTop: 2,
   },
-  priceAndStatus: {
-    alignItems: "flex-end",
-    gap: 6,
-  },
-  priceText: {
-    fontSize: 15,
-    fontFamily: "Poppins-Bold",
-    color: Colors.primary,
-  },
-  statusPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  statusText: {
-    fontSize: 10,
-    fontFamily: "Poppins-Bold",
-  },
-  emptyContainer: {
+  viewDetailsBtn: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 80,
-    paddingHorizontal: 32,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 8,
+    marginTop: 4,
   },
-  emptyTitle: {
+  viewDetailsText: {
+    fontSize: 13,
+    fontFamily: "Poppins-Bold",
+  },
+  lifetimeImpactCard: {
+    backgroundColor: "#003527",
+    borderRadius: 20,
+    padding: 18,
+    gap: 12,
+    marginTop: 4,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  lifetimeTitle: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontFamily: "Poppins-Bold",
+  },
+  lifetimeStatsRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  lifetimeStatBox: {
+    flex: 1,
+    backgroundColor: "#2B6954",
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lifetimeStatNum: {
+    color: "#FFFFFF",
+    fontSize: 24,
+    fontFamily: "Poppins-Bold",
+  },
+  lifetimeStatLabel: {
+    color: "#95D3BA",
+    fontSize: 10,
+    fontFamily: "Poppins-Bold",
+    marginTop: 2,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "flex-end",
+  },
+  modalCard: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    maxHeight: "85%",
+    overflow: "hidden",
+  },
+  modalHeaderImage: {
+    width: "100%",
+    height: 170,
+  },
+  modalBody: {
+    padding: 20,
+  },
+  modalTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  modalOrderTitle: {
     fontSize: 18,
     fontFamily: "Poppins-Bold",
-    color: Colors.textDark,
   },
-  emptySubtitle: {
-    fontSize: 13,
+  modalOrderDate: {
+    fontSize: 12,
     fontFamily: "Poppins-Medium",
-    color: Colors.greyText,
-    textAlign: "center",
-    marginTop: 4,
-    lineHeight: 18,
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    padding: 6,
+  },
+  modalInfoCard: {
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    gap: 10,
+    marginBottom: 18,
+  },
+  modalInfoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  modalInfoLabel: {
+    fontSize: 12,
+    fontFamily: "Poppins-Medium",
+  },
+  modalInfoValue: {
+    fontSize: 13,
+    fontFamily: "Poppins-Bold",
+  },
+  modalDoneBtn: {
+    height: 48,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalDoneBtnText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontFamily: "Poppins-Bold",
   },
 });

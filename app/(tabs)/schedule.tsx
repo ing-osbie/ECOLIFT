@@ -1,391 +1,554 @@
-import React, { useState } from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  TouchableOpacity, 
-  ScrollView, 
-  Modal,
-  TextInput,
-  Platform
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-
-import { GradientBackground } from '@/components/gradient-background';
-import { GlassCard } from '@/components/glass-card';
-import { Colors, getColors } from '@/constants/theme';
-import { useApp } from '@/context/AppContext';
-import { CustomAlert, useCustomAlert } from '@/components/custom-alert';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Calendar as CalendarIcon, 
-  Plus, 
-  MapPin, 
-  Trash2, 
-  UserCheck,
-  Clock,
+import { CustomAlert, useCustomAlert } from "@/components/custom-alert";
+import { GlassCard } from "@/components/glass-card";
+import { GradientBackground } from "@/components/gradient-background";
+import { Colors, getColors } from "@/constants/theme";
+import { useApp } from "@/context/AppContext";
+import { useRouter } from "expo-router";
+import {
+  ArrowRight,
+  Calendar as CalendarIcon,
   Check,
-  X
-} from 'lucide-react-native';
+  ChevronLeft,
+  ChevronRight,
+  CloudSun,
+  FileText,
+  Moon,
+  Plus,
+  Recycle,
+  Sun,
+  Trash2,
+  X,
+} from "lucide-react-native";
+import React, { useState } from "react";
+import {
+  Dimensions,
+  Image,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MARCH_2026_DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
-
-interface ScheduledItem {
+interface SummaryItem {
   id: string;
   title: string;
-  driver: string;
-  dateRange: string;
-  timeSlot: string;
-  color: string;
-  wasteType: string;
-  address: string;
+  qty: string;
+  icon: "paper" | "plastic" | "organic" | "ewaste";
 }
 
-export default function Schedule() {
-  const { isDarkMode, userName } = useApp();
+const INITIAL_SUMMARY: SummaryItem[] = [
+  {
+    id: "1",
+    title: "Mixed Paper & Cardboard",
+    qty: "Approx. 2 bags",
+    icon: "paper",
+  },
+  {
+    id: "2",
+    title: "Plastics (Type 1 & 2)",
+    qty: "1 large bin",
+    icon: "plastic",
+  },
+];
 
+const DAYS_OF_WEEK = ["S", "M", "T", "W", "T", "F", "S"];
+const DAYS_IN_MONTH = 31;
+const START_DAY_OFFSET = 2; // Starts on Tuesday
+
+export default function Schedule() {
+  const router = useRouter();
+  const { isDarkMode } = useApp();
   const C = getColors(isDarkMode);
   const { showAlert, alertProps } = useCustomAlert();
 
-  const [isCalendarModalVisible, setIsCalendarModalVisible] = useState(false);
-  const currentMonth = 'March 2026';
-
+  const [summaryItems, setSummaryItems] = useState<SummaryItem[]>(INITIAL_SUMMARY);
   const [selectedDay, setSelectedDay] = useState<number>(15);
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('Morning (8 - 11 AM)');
-  const [newTitle, setNewTitle] = useState('');
-  const [newAddress, setNewAddress] = useState('12 Ring Road Central, Osu');
-  const [selectedWasteType, setSelectedWasteType] = useState('Plastic & Metal');
+  const [selectedSlot, setSelectedSlot] = useState<"morning" | "afternoon" | "evening">("morning");
+  const [monthName, setMonthName] = useState("October 2023");
 
-  const [scheduledItems, setScheduledItems] = useState<ScheduledItem[]>([
-    {
-      id: '1',
-      title: 'Plastic & Bottles Pickup',
-      driver: 'Kwame Mensah (Ecolift Fleet)',
-      dateRange: 'Mar 15, 2026',
-      timeSlot: 'Morning (8 - 11 AM)',
-      color: '#3B82F6',
-      wasteType: 'Plastic',
-      address: '12 Ring Road Central, Accra',
-    },
-    {
-      id: '2',
-      title: 'Organic Food & Compost',
-      driver: 'Kofi Owusu',
-      dateRange: 'Mar 18, 2026',
-      timeSlot: 'Afternoon (1 - 4 PM)',
-      color: '#8B5CF6',
-      wasteType: 'Organic',
-      address: '45 Cantonments Rd, Accra',
-    },
-    {
-      id: '3',
-      title: 'Bulk E-Waste & Metal',
-      driver: 'Abena Osei',
-      dateRange: 'Mar 24, 2026',
-      timeSlot: 'Evening (5 - 8 PM)',
-      color: '#10B981',
-      wasteType: 'E-Waste',
-      address: '12 Ring Road Central, Accra',
-    },
-  ]);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newItemTitle, setNewItemTitle] = useState("");
+  const [newItemQty, setNewItemQty] = useState("");
 
   const handleDeleteItem = (id: string) => {
-    setScheduledItems(prev => prev.filter(item => item.id !== id));
-    showAlert({
-      type: 'success',
-      title: 'Pickup Cancelled',
-      message: 'The scheduled pickup has been removed from your list.',
-    });
+    setSummaryItems((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const handleSaveNewSchedule = () => {
-    const titleToUse = newTitle.trim() || `${selectedWasteType} Pickup`;
-    const newScheduleItem: ScheduledItem = {
+  const handleAddItem = () => {
+    if (!newItemTitle.trim()) return;
+    const newItem: SummaryItem = {
       id: Date.now().toString(),
-      title: titleToUse,
-      driver: 'Ecolift Express Driver',
-      dateRange: `Mar ${selectedDay}, 2026`,
-      timeSlot: selectedTimeSlot,
-      color: selectedWasteType === 'Plastic' ? '#3B82F6' : selectedWasteType === 'Organic' ? '#8B5CF6' : '#10B981',
-      wasteType: selectedWasteType,
-      address: newAddress,
+      title: newItemTitle,
+      qty: newItemQty || "1 bag / bin",
+      icon: "paper",
     };
+    setSummaryItems((prev) => [...prev, newItem]);
+    setNewItemTitle("");
+    setNewItemQty("");
+    setShowAddModal(false);
+  };
 
-    setScheduledItems(prev => [newScheduleItem, ...prev]);
-    setIsCalendarModalVisible(false);
-    setNewTitle('');
+  const handleConfirmSchedule = () => {
+    if (summaryItems.length === 0) {
+      showAlert({
+        type: "error",
+        title: "No Waste Items",
+        message: "Please add at least one waste item to schedule a pickup.",
+      });
+      return;
+    }
+
+    const slotLabel =
+      selectedSlot === "morning"
+        ? "Morning (8:00 AM - 12:00 PM)"
+        : "Afternoon (12:00 PM - 4:00 PM)";
 
     showAlert({
-      type: 'success',
-      title: 'Schedule Saved!',
-      message: `Your pickup for Mar ${selectedDay}, 2026 (${selectedTimeSlot}) has been confirmed.`,
+      type: "success",
+      title: "Pickup Confirmed!",
+      message: `Your pickup is scheduled for ${monthName.split(" ")[0]} ${selectedDay} (${slotLabel}). Our driver will arrive in your requested time window.`,
+      actions: [
+        {
+          label: "View History",
+          onPress: () => router.push("/(tabs)/orders" as any),
+        },
+      ],
     });
   };
 
   return (
-    <GradientBackground style={styles.container}>
+    <View style={[styles.container, { backgroundColor: isDarkMode ? "#0E1412" : "#F9F9FF" }]}>
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView 
-          contentContainerStyle={styles.scrollContainer} 
+        {/* Top Header */}
+        <View style={styles.header}>
+          <View style={styles.brandRow}>
+            <Text style={[styles.brandTitle, { color: isDarkMode ? "#95D3BA" : "#003527" }]}>
+              EcoLift
+            </Text>
+            <Text style={[styles.headerDivider, { color: C.greyText }]}>|</Text>
+            <Text style={[styles.headerSubTitle, { color: C.text }]}>Schedule</Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => router.push("/(tabs)/profile" as any)}
+            style={styles.avatarBtn}
+            activeOpacity={0.8}
+          >
+            <Image
+              source={{
+                uri: "https://lh3.googleusercontent.com/aida/AP1WRLvvebFOZ6ynMsVwLT_RhMB47PIf8hxioUnplUngiLRck_uwziGuo8q9YO5aj1foVEUmhejlyafL2z2OHqEPi7FC8azbJoc-ziJbt6qsF5SMnw3GGseHcRNMOLhOvVO7v71vEGCzSy99We7_7rFyQI5Xzz2j4GcrsBMMWBjTRHPbwqUwGF-tolAZtlI0fp2FGa_-ATEKQMsHpKcZA_Q1cKK8GQq6hUUor6q0TpvsuD-ZBS35WmtkQvEqKtrn1A2MHmfBS2lh9XHmQQ",
+              }}
+              style={styles.avatarImage}
+            />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          
-          {/* Header Row */}
-          <View style={styles.headerRow}>
-            <View>
-              <Text style={[styles.headerTitle, { color: C.text }]}>Schedule</Text>
-              <Text style={[styles.headerSubtitle, { color: C.greyText }]}>Your active scheduled collections</Text>
-            </View>
-
-            {/* Avatar Circle */}
-            <View style={[styles.avatarCircle, { backgroundColor: isDarkMode ? '#2C3230' : '#FFFFFF' }]}>
-              <Text style={styles.avatarInitials}>
-                {userName ? userName.substring(0, 2).toUpperCase() : 'KM'}
-              </Text>
+          {/* Visual Context Hero Image */}
+          <View style={styles.heroBanner}>
+            <Image
+              source={{
+                uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuBGmt3379VzH-TBw12m01zbVy_x5r-ps4-pkhQLUZeJCeuZNsMkeO26sdUQZKLrNE7Pc-EQQs4DJuTFD7MRlX3LgSYcJivnTM4N1ShxlwXjUbotPacfmuy0EvVCEeAqhAvGfmUwf8Udd1jWHQw7o5QsjXIGlEr4fCPeXfZSAbudbxkHb7RHLVL00fRYrhf3Tha9qIQ3wRCHDvMHs-vgQhhYQHQZ235gp0XZ-sjhhvzn3qhzUxkcpUte",
+              }}
+              style={styles.heroBannerImage}
+            />
+            <View style={styles.heroGradient}>
+              <Text style={styles.heroTitle}>Schedule Pickup</Text>
             </View>
           </View>
 
-          {/* Top Stat Banner (Sleek 16px radius card) */}
-          <GlassCard style={styles.summaryBannerCard}>
-            <View style={styles.summaryLeft}>
-              <Text style={[styles.summaryBigNumber, { color: isDarkMode ? Colors.accent : Colors.primary }]}>
-                {scheduledItems.length} Scheduled
-              </Text>
-              <Text style={[styles.summarySubtext, { color: C.greyText }]}>
-                Next pickup in 2 days (Mar 15)
-              </Text>
+          {/* Pickup Summary Card */}
+          <View
+            style={[
+              styles.sectionCard,
+              {
+                backgroundColor: isDarkMode ? "#1A211E" : "#E7EEFE",
+                borderColor: isDarkMode ? "#2B3530" : "#DCE2F3",
+              },
+            ]}
+          >
+            <View style={styles.sectionHeaderRow}>
+              <View style={styles.sectionTitleGroup}>
+                <Recycle size={18} color="#006C49" />
+                <Text style={[styles.sectionTitle, { color: C.text }]}>Pickup Summary</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.addSmallBtn}
+                onPress={() => setShowAddModal(true)}
+              >
+                <Plus size={16} color="#006C49" />
+                <Text style={styles.addSmallBtnText}>Add</Text>
+              </TouchableOpacity>
             </View>
 
-            <TouchableOpacity 
-              style={[styles.bannerAddBtn, { backgroundColor: isDarkMode ? Colors.accent : Colors.primary }]}
-              onPress={() => setIsCalendarModalVisible(true)}
-              activeOpacity={0.9}
-            >
-              <Plus size={18} color={isDarkMode ? '#000000' : '#FFFFFF'} />
-              <Text style={[styles.bannerAddText, { color: isDarkMode ? '#000000' : '#FFFFFF' }]}>Schedule</Text>
-            </TouchableOpacity>
-          </GlassCard>
-
-          {/* 3 Metric Counter Stat Cards */}
-          <View style={styles.metricsRow}>
-            <View style={[styles.metricCard, { backgroundColor: C.card, borderColor: C.border }]}>
-              <Text style={[styles.metricNumber, { color: C.text }]}>9</Text>
-              <Text style={[styles.metricLabel, { color: C.greyText }]}>Completed</Text>
-            </View>
-
-            <View style={[styles.metricCard, { backgroundColor: C.card, borderColor: C.border }]}>
-              <Text style={[styles.metricNumber, { color: C.text }]}>89 kg</Text>
-              <Text style={[styles.metricLabel, { color: C.greyText }]}>Recycled</Text>
-            </View>
-
-            <View style={[styles.metricCard, { backgroundColor: C.card, borderColor: C.border }]}>
-              <Text style={[styles.metricNumber, { color: C.text }]}>6</Text>
-              <Text style={[styles.metricLabel, { color: C.greyText }]}>Eco Badges</Text>
-            </View>
-          </View>
-
-          {/* Scheduled Pickups List */}
-          <View style={styles.listSection}>
-            <View style={styles.listHeaderRow}>
-              <Text style={[styles.listSectionTitle, { color: C.text }]}>Active Schedules</Text>
-              <Text style={[styles.listCountText, { color: C.greyText }]}>{scheduledItems.length} items</Text>
-            </View>
-
-            {scheduledItems.map((item) => (
-              <GlassCard key={item.id} style={styles.pickupItemCard}>
-                <View style={styles.pickupCardHeader}>
-                  <View style={styles.titleWithBadge}>
-                    <View style={[styles.colorDot, { backgroundColor: item.color }]} />
-                    <Text style={[styles.itemTitle, { color: C.text }]}>{item.title}</Text>
+            <View style={styles.summaryItemsList}>
+              {summaryItems.map((item) => (
+                <View
+                  key={item.id}
+                  style={[
+                    styles.summaryItemRow,
+                    {
+                      backgroundColor: isDarkMode ? "#141A17" : "#FFFFFF",
+                      borderColor: isDarkMode ? "#2B3530" : "#DCE2F3",
+                    },
+                  ]}
+                >
+                  <View style={styles.summaryItemLeft}>
+                    <View
+                      style={[
+                        styles.summaryItemIcon,
+                        {
+                          backgroundColor:
+                            item.icon === "paper"
+                              ? "rgba(6, 78, 59, 0.15)"
+                              : "rgba(108, 248, 187, 0.2)",
+                        },
+                      ]}
+                    >
+                      {item.icon === "paper" ? (
+                        <FileText size={18} color="#006C49" />
+                      ) : (
+                        <Recycle size={18} color="#00714D" />
+                      )}
+                    </View>
+                    <View>
+                      <Text style={[styles.summaryItemTitle, { color: C.text }]}>
+                        {item.title}
+                      </Text>
+                      <Text style={[styles.summaryItemQty, { color: C.greyText }]}>
+                        {item.qty}
+                      </Text>
+                    </View>
                   </View>
 
-                  <TouchableOpacity onPress={() => handleDeleteItem(item.id)}>
-                    <Trash2 size={16} color={Colors.danger} />
+                  <TouchableOpacity
+                    onPress={() => handleDeleteItem(item.id)}
+                    style={styles.deleteItemBtn}
+                  >
+                    <Trash2 size={16} color="#BA1A1A" />
                   </TouchableOpacity>
                 </View>
+              ))}
 
-                <View style={styles.itemMetaRow}>
-                  <UserCheck size={13} color={C.greyText} />
-                  <Text style={[styles.itemMetaText, { color: C.greyText }]}>{item.driver}</Text>
-                </View>
-
-                <View style={styles.itemMetaRow}>
-                  <CalendarIcon size={13} color={C.greyText} />
-                  <Text style={[styles.itemMetaText, { color: C.greyText }]}>{item.dateRange} · {item.timeSlot}</Text>
-                </View>
-
-                <View style={styles.itemMetaRow}>
-                  <MapPin size={13} color={C.greyText} />
-                  <Text style={[styles.itemMetaText, { color: C.greyText }]} numberOfLines={1}>{item.address}</Text>
-                </View>
-              </GlassCard>
-            ))}
+              {summaryItems.length === 0 && (
+                <Text style={[styles.emptySummaryText, { color: C.greyText }]}>
+                  No items selected. Tap "+ Add" to include waste categories.
+                </Text>
+              )}
+            </View>
           </View>
 
-          {/* Bottom Floating Add Button (Clear of Tab Bar) */}
-          <TouchableOpacity 
+          {/* Select Date Calendar Card */}
+          <View
             style={[
-              styles.floatingAddBtn, 
-              { backgroundColor: isDarkMode ? Colors.accent : Colors.primary }
+              styles.sectionCard,
+              {
+                backgroundColor: isDarkMode ? "#1A211E" : "#E7EEFE",
+                borderColor: isDarkMode ? "#2B3530" : "#DCE2F3",
+              },
             ]}
-            onPress={() => setIsCalendarModalVisible(true)}
-            activeOpacity={0.9}
           >
-            <Plus size={20} color={isDarkMode ? '#000000' : '#FFFFFF'} />
-            <Text style={[styles.floatingAddText, { color: isDarkMode ? '#000000' : '#FFFFFF' }]}>Schedule New Pickup</Text>
-          </TouchableOpacity>
-
-        </ScrollView>
-
-        {/* ------------------- INTERACTIVE CALENDAR MODAL ------------------- */}
-        <Modal
-          visible={isCalendarModalVisible}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setIsCalendarModalVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalCard, { backgroundColor: isDarkMode ? '#1E2321' : '#FFFFFF' }]}>
-              
-              {/* Modal Header */}
-              <View style={styles.modalHeader}>
-                <Text style={[styles.modalTitle, { color: C.text }]}>Schedule New Pickup</Text>
-                <TouchableOpacity onPress={() => setIsCalendarModalVisible(false)}>
-                  <X size={20} color={C.text} />
-                </TouchableOpacity>
+            <View style={styles.sectionHeaderRow}>
+              <View style={styles.sectionTitleGroup}>
+                <CalendarIcon size={18} color="#006C49" />
+                <Text style={[styles.sectionTitle, { color: C.text }]}>Select Date</Text>
               </View>
+            </View>
 
-              <ScrollView showsVerticalScrollIndicator={false}>
-                {/* Month Selector */}
-                <View style={styles.monthHeaderRow}>
-                  <Text style={[styles.monthText, { color: C.text }]}>{currentMonth}</Text>
-                  <View style={styles.navBtns}>
-                    <TouchableOpacity style={[styles.smallNavBtn, { borderColor: C.border }]}>
-                      <ChevronLeft size={16} color={C.text} />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.smallNavBtn, { borderColor: C.border }]}>
-                      <ChevronRight size={16} color={C.text} />
-                    </TouchableOpacity>
+            {/* Calendar Controls */}
+            <View style={styles.calendarMonthRow}>
+              <TouchableOpacity
+                onPress={() => setMonthName("September 2023")}
+                style={styles.monthNavBtn}
+              >
+                <ChevronLeft size={18} color={C.text} />
+              </TouchableOpacity>
+              <Text style={[styles.calendarMonthTitle, { color: C.text }]}>
+                {monthName}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setMonthName("November 2023")}
+                style={styles.monthNavBtn}
+              >
+                <ChevronRight size={18} color={C.text} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Days of Week Header */}
+            <View style={styles.daysOfWeekGrid}>
+              {DAYS_OF_WEEK.map((d, index) => (
+                <Text key={index} style={[styles.dayOfWeekHeader, { color: C.greyText }]}>
+                  {d}
+                </Text>
+              ))}
+            </View>
+
+            {/* 7-column Calendar Grid */}
+            <View style={styles.daysGrid}>
+              {/* Start Day Empty Offsets */}
+              {Array.from({ length: START_DAY_OFFSET }).map((_, i) => (
+                <View key={`empty-${i}`} style={styles.dayCell} />
+              ))}
+
+              {/* Days Numbers */}
+              {Array.from({ length: DAYS_IN_MONTH }).map((_, i) => {
+                const dayNum = i + 1;
+                const isPast = dayNum < 14;
+                const isSelected = dayNum === selectedDay;
+
+                return (
+                  <TouchableOpacity
+                    key={`day-${dayNum}`}
+                    style={[
+                      styles.dayCell,
+                      isSelected && {
+                        backgroundColor: "#003527",
+                        shadowColor: "#000000",
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.2,
+                        shadowRadius: 4,
+                        elevation: 3,
+                      },
+                    ]}
+                    disabled={isPast}
+                    onPress={() => setSelectedDay(dayNum)}
+                  >
+                    <Text
+                      style={[
+                        styles.dayCellText,
+                        {
+                          color: isSelected
+                            ? "#FFFFFF"
+                            : isPast
+                            ? isDarkMode
+                              ? "rgba(255, 255, 255, 0.2)"
+                              : "rgba(0, 0, 0, 0.25)"
+                            : C.text,
+                        },
+                        isSelected && { fontFamily: "Poppins-Bold" },
+                      ]}
+                    >
+                      {dayNum}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Select Time Slot Card */}
+          <View
+            style={[
+              styles.sectionCard,
+              {
+                backgroundColor: isDarkMode ? "#1A211E" : "#E7EEFE",
+                borderColor: isDarkMode ? "#2B3530" : "#DCE2F3",
+              },
+            ]}
+          >
+            <View style={styles.sectionHeaderRow}>
+              <View style={styles.sectionTitleGroup}>
+                <Sun size={18} color="#006C49" />
+                <Text style={[styles.sectionTitle, { color: C.text }]}>Select Time Slot</Text>
+              </View>
+            </View>
+
+            <View style={styles.timeSlotsColumn}>
+              {/* Morning Slot */}
+              <TouchableOpacity
+                style={[
+                  styles.timeSlotCard,
+                  {
+                    backgroundColor: isDarkMode ? "#141A17" : "#FFFFFF",
+                    borderColor:
+                      selectedSlot === "morning"
+                        ? "#003527"
+                        : isDarkMode
+                        ? "#2B3530"
+                        : "#DCE2F3",
+                    borderWidth: selectedSlot === "morning" ? 2 : 1,
+                  },
+                ]}
+                onPress={() => setSelectedSlot("morning")}
+                activeOpacity={0.85}
+              >
+                <View style={styles.timeSlotLeft}>
+                  <Sun size={20} color="#006C49" />
+                  <View>
+                    <Text style={[styles.timeSlotName, { color: C.text }]}>Morning</Text>
+                    <Text style={[styles.timeSlotHours, { color: C.greyText }]}>
+                      8:00 AM - 12:00 PM
+                    </Text>
                   </View>
                 </View>
 
-                {/* Day of Week Row */}
-                <View style={styles.daysOfWeekRow}>
-                  {DAYS_OF_WEEK.map((day, idx) => (
-                    <Text key={idx} style={[styles.dayOfWeekText, { color: C.greyText }]}>{day}</Text>
-                  ))}
-                </View>
-
-                {/* Interactive Calendar Date Grid */}
-                <View style={styles.daysGrid}>
-                  {MARCH_2026_DAYS.map((day) => {
-                    const isSelected = day === selectedDay;
-                    return (
-                      <TouchableOpacity
-                        key={day}
-                        style={styles.dayCell}
-                        onPress={() => setSelectedDay(day)}
-                        activeOpacity={0.8}
-                      >
-                        <View style={[
-                          styles.dayPill,
-                          isSelected && { backgroundColor: isDarkMode ? Colors.accent : Colors.primary }
-                        ]}>
-                          <Text style={[
-                            styles.dayCellText,
-                            { color: isSelected ? (isDarkMode ? '#000000' : '#FFFFFF') : C.text },
-                            isSelected && { fontFamily: 'Poppins-Bold' }
-                          ]}>{day}</Text>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                {/* Time Slot Selector */}
-                <Text style={[styles.inputLabel, { color: C.text }]}>Preferred Time Slot</Text>
-                <View style={styles.timeSlotsRow}>
-                  {['Morning (8 - 11 AM)', 'Afternoon (1 - 4 PM)', 'Evening (5 - 8 PM)'].map((slot) => {
-                    const isSelected = selectedTimeSlot === slot;
-                    return (
-                      <TouchableOpacity
-                        key={slot}
-                        style={[
-                          styles.timeSlotChip,
-                          { borderColor: isSelected ? (isDarkMode ? Colors.accent : Colors.primary) : C.border },
-                          isSelected && { backgroundColor: isDarkMode ? 'rgba(182, 255, 60, 0.15)' : 'rgba(11, 61, 46, 0.08)' }
-                        ]}
-                        onPress={() => setSelectedTimeSlot(slot)}
-                      >
-                        <Clock size={12} color={isSelected ? (isDarkMode ? Colors.accent : Colors.primary) : C.greyText} />
-                        <Text style={[
-                          styles.timeSlotText,
-                          { color: isSelected ? (isDarkMode ? Colors.accent : Colors.primary) : C.text },
-                          isSelected && { fontFamily: 'Poppins-Bold' }
-                        ]}>{slot}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                {/* Waste Type Selector */}
-                <Text style={[styles.inputLabel, { color: C.text }]}>Waste Type</Text>
-                <View style={styles.timeSlotsRow}>
-                  {['Plastic & Metal', 'Organic Food', 'Bulk E-Waste'].map((wType) => {
-                    const isSelected = selectedWasteType === wType;
-                    return (
-                      <TouchableOpacity
-                        key={wType}
-                        style={[
-                          styles.timeSlotChip,
-                          { borderColor: isSelected ? (isDarkMode ? Colors.accent : Colors.primary) : C.border },
-                          isSelected && { backgroundColor: isDarkMode ? 'rgba(182, 255, 60, 0.15)' : 'rgba(11, 61, 46, 0.08)' }
-                        ]}
-                        onPress={() => setSelectedWasteType(wType)}
-                      >
-                        <Text style={[
-                          styles.timeSlotText,
-                          { color: isSelected ? (isDarkMode ? Colors.accent : Colors.primary) : C.text },
-                          isSelected && { fontFamily: 'Poppins-Bold' }
-                        ]}>{wType}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                {/* Address Input */}
-                <Text style={[styles.inputLabel, { color: C.text }]}>Pickup Address</Text>
-                <View style={[styles.addressInputContainer, { borderColor: C.border, backgroundColor: isDarkMode ? '#141716' : '#F7FAF8' }]}>
-                  <MapPin size={16} color={C.primary} />
-                  <TextInput
-                    style={[styles.addressInput, { color: C.text }]}
-                    value={newAddress}
-                    onChangeText={setNewAddress}
-                    placeholder="Enter pickup address"
-                    placeholderTextColor={C.greyText}
-                  />
-                </View>
-
-                {/* Done CTA Button */}
-                <TouchableOpacity 
-                  style={[styles.donePrimaryBtn, { backgroundColor: isDarkMode ? Colors.accent : Colors.primary }]}
-                  onPress={handleSaveNewSchedule}
-                  activeOpacity={0.9}
+                <View
+                  style={[
+                    styles.radioIndicator,
+                    {
+                      borderColor:
+                        selectedSlot === "morning" ? "#003527" : "#707974",
+                    },
+                  ]}
                 >
-                  <Check size={18} color={isDarkMode ? '#000000' : '#FFFFFF'} />
-                  <Text style={[styles.doneBtnText, { color: isDarkMode ? '#000000' : '#FFFFFF' }]}>Done & Save Schedule</Text>
-                </TouchableOpacity>
-              </ScrollView>
+                  {selectedSlot === "morning" && (
+                    <View style={styles.radioInnerFilled} />
+                  )}
+                </View>
+              </TouchableOpacity>
 
+              {/* Afternoon Slot */}
+              <TouchableOpacity
+                style={[
+                  styles.timeSlotCard,
+                  {
+                    backgroundColor: isDarkMode ? "#141A17" : "#FFFFFF",
+                    borderColor:
+                      selectedSlot === "afternoon"
+                        ? "#003527"
+                        : isDarkMode
+                        ? "#2B3530"
+                        : "#DCE2F3",
+                    borderWidth: selectedSlot === "afternoon" ? 2 : 1,
+                  },
+                ]}
+                onPress={() => setSelectedSlot("afternoon")}
+                activeOpacity={0.85}
+              >
+                <View style={styles.timeSlotLeft}>
+                  <CloudSun size={20} color="#006C49" />
+                  <View>
+                    <Text style={[styles.timeSlotName, { color: C.text }]}>Afternoon</Text>
+                    <Text style={[styles.timeSlotHours, { color: C.greyText }]}>
+                      12:00 PM - 4:00 PM
+                    </Text>
+                  </View>
+                </View>
+
+                <View
+                  style={[
+                    styles.radioIndicator,
+                    {
+                      borderColor:
+                        selectedSlot === "afternoon" ? "#003527" : "#707974",
+                    },
+                  ]}
+                >
+                  {selectedSlot === "afternoon" && (
+                    <View style={styles.radioInnerFilled} />
+                  )}
+                </View>
+              </TouchableOpacity>
+
+              {/* Evening Slot (Disabled) */}
+              <View
+                style={[
+                  styles.timeSlotCard,
+                  {
+                    backgroundColor: isDarkMode ? "#141A17" : "#FFFFFF",
+                    borderColor: isDarkMode ? "#2B3530" : "#DCE2F3",
+                    opacity: 0.5,
+                  },
+                ]}
+              >
+                <View style={styles.timeSlotLeft}>
+                  <Moon size={20} color={C.greyText} />
+                  <View>
+                    <Text style={[styles.timeSlotName, { color: C.greyText }]}>
+                      Evening (Unavailable)
+                    </Text>
+                    <Text style={[styles.timeSlotHours, { color: C.greyText }]}>
+                      4:00 PM - 8:00 PM
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={[styles.radioIndicator, { borderColor: "#707974" }]} />
+              </View>
+            </View>
+          </View>
+
+          {/* Confirm Schedule Button */}
+          <TouchableOpacity
+            style={[styles.confirmScheduleBtn, { backgroundColor: "#003527" }]}
+            onPress={handleConfirmSchedule}
+            activeOpacity={0.9}
+          >
+            <Text style={styles.confirmScheduleBtnText}>Confirm Schedule</Text>
+            <ArrowRight size={18} color="#FFFFFF" />
+          </TouchableOpacity>
+        </ScrollView>
+
+        {/* Add Item Modal */}
+        <Modal
+          visible={showAddModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowAddModal(false)}
+        >
+          <View style={styles.modalBackdrop}>
+            <View
+              style={[
+                styles.addModalCard,
+                { backgroundColor: isDarkMode ? "#1A211E" : "#FFFFFF" },
+              ]}
+            >
+              <Text style={[styles.addModalTitle, { color: C.text }]}>Add Waste Item</Text>
+              <TextInput
+                style={[
+                  styles.modalInput,
+                  {
+                    color: C.text,
+                    backgroundColor: isDarkMode ? "#141A17" : "#F0F3FF",
+                    borderColor: isDarkMode ? "#2B3530" : "#DCE2F3",
+                  },
+                ]}
+                placeholder="Item Name (e.g. Glass Bottles)"
+                placeholderTextColor={C.greyText}
+                value={newItemTitle}
+                onChangeText={setNewItemTitle}
+              />
+              <TextInput
+                style={[
+                  styles.modalInput,
+                  {
+                    color: C.text,
+                    backgroundColor: isDarkMode ? "#141A17" : "#F0F3FF",
+                    borderColor: isDarkMode ? "#2B3530" : "#DCE2F3",
+                  },
+                ]}
+                placeholder="Quantity (e.g. 2 bins, 1 box)"
+                placeholderTextColor={C.greyText}
+                value={newItemQty}
+                onChangeText={setNewItemQty}
+              />
+              <View style={styles.modalActionsRow}>
+                <TouchableOpacity
+                  style={[styles.modalCancelBtn, { borderColor: C.border }]}
+                  onPress={() => setShowAddModal(false)}
+                >
+                  <Text style={[styles.modalCancelBtnText, { color: C.text }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalSubmitBtn, { backgroundColor: "#003527" }]}
+                  onPress={handleAddItem}
+                >
+                  <Text style={styles.modalSubmitBtnText}>Add Item</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </Modal>
-
       </SafeAreaView>
       <CustomAlert {...alertProps} />
-    </GradientBackground>
+    </View>
   );
 }
 
@@ -396,292 +559,305 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  scrollContainer: {
+  header: {
+    height: 56,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 130,
   },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: Platform.OS === 'ios' ? 12 : 24,
-    marginBottom: 16,
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
-  headerTitle: {
+  brandTitle: {
     fontSize: 22,
-    fontFamily: 'Poppins-Bold',
+    fontFamily: "Poppins-Bold",
+    letterSpacing: -0.5,
   },
-  headerSubtitle: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
+  headerDivider: {
+    fontSize: 16,
+    fontFamily: "Poppins-Medium",
   },
-  avatarCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000000',
+  headerSubTitle: {
+    fontSize: 16,
+    fontFamily: "Poppins-SemiBold",
+  },
+  avatarBtn: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#95D3BA",
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 110,
+    gap: 16,
+  },
+  heroBanner: {
+    width: "100%",
+    height: 140,
+    borderRadius: 20,
+    overflow: "hidden",
+    position: "relative",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  heroBannerImage: {
+    width: "100%",
+    height: "100%",
+  },
+  heroGradient: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    justifyContent: "flex-end",
+    padding: 16,
+  },
+  heroTitle: {
+    color: "#FFFFFF",
+    fontSize: 22,
+    fontFamily: "Poppins-Bold",
+  },
+  sectionCard: {
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    shadowColor: "#000000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 6,
     elevation: 2,
+    gap: 12,
   },
-  avatarInitials: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
-    color: Colors.primary,
+  sectionHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
-  summaryBannerCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
-  },
-  summaryLeft: {
-    flex: 1,
-  },
-  summaryBigNumber: {
-    fontSize: 18,
-    fontFamily: 'Poppins-Bold',
-    marginBottom: 2,
-  },
-  summarySubtext: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
-  },
-  bannerAddBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-    gap: 6,
-  },
-  bannerAddText: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
-  },
-  metricsRow: {
-    flexDirection: 'row',
+  sectionTitleGroup: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
-    marginBottom: 16,
   },
-  metricCard: {
-    flex: 1,
-    paddingVertical: 10,
+  sectionTitle: {
+    fontSize: 16,
+    fontFamily: "Poppins-Bold",
+  },
+  addSmallBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(108, 248, 187, 0.3)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  addSmallBtnText: {
+    fontSize: 12,
+    fontFamily: "Poppins-Bold",
+    color: "#006C49",
+  },
+  summaryItemsList: {
+    gap: 10,
+  },
+  summaryItemRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 12,
     borderRadius: 14,
     borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  metricNumber: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
-    marginBottom: 1,
+  summaryItemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
-  metricLabel: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Medium',
+  summaryItemIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  listSection: {
-    marginBottom: 16,
+  summaryItemTitle: {
+    fontSize: 14,
+    fontFamily: "Poppins-Bold",
   },
-  listHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
+  summaryItemQty: {
+    fontSize: 11,
+    fontFamily: "Poppins-Medium",
+    marginTop: 2,
   },
-  listSectionTitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
+  deleteItemBtn: {
+    padding: 6,
   },
-  listCountText: {
+  emptySummaryText: {
     fontSize: 12,
-    fontFamily: 'Poppins-Medium',
+    fontFamily: "Poppins-Medium",
+    textAlign: "center",
+    paddingVertical: 10,
   },
-  pickupItemCard: {
-    marginBottom: 10,
+  calendarMonthRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 8,
+  },
+  monthNavBtn: {
+    padding: 6,
+  },
+  calendarMonthTitle: {
+    fontSize: 15,
+    fontFamily: "Poppins-Bold",
+  },
+  daysOfWeekGrid: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingVertical: 4,
+  },
+  dayOfWeekHeader: {
+    fontSize: 12,
+    fontFamily: "Poppins-Bold",
+    width: 36,
+    textAlign: "center",
+  },
+  daysGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "flex-start",
+  },
+  dayCell: {
+    width: (Dimensions.get("window").width - 74) / 7,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    marginVertical: 2,
+  },
+  dayCellText: {
+    fontSize: 13,
+    fontFamily: "Poppins-Medium",
+  },
+  timeSlotsColumn: {
+    gap: 10,
+  },
+  timeSlotCard: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: 14,
     borderRadius: 14,
   },
-  pickupCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+  timeSlotLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
-  titleWithBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  colorDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  itemTitle: {
+  timeSlotName: {
     fontSize: 14,
-    fontFamily: 'Poppins-Bold',
+    fontFamily: "Poppins-Bold",
   },
-  itemMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
-  itemMetaText: {
+  timeSlotHours: {
     fontSize: 11,
-    fontFamily: 'Poppins-Medium',
+    fontFamily: "Poppins-Medium",
+    marginTop: 2,
   },
-  floatingAddBtn: {
-    flexDirection: 'row',
-    height: 50,
+  radioIndicator: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  radioInnerFilled: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#003527",
+  },
+  confirmScheduleBtn: {
+    height: 52,
     borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
+    marginTop: 4,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
     elevation: 3,
   },
-  floatingAddText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
+  confirmScheduleBtnText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontFamily: "Poppins-Bold",
   },
-  modalOverlay: {
+  modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
   },
-  modalCard: {
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-    maxHeight: '88%',
+  addModalCard: {
+    width: "100%",
+    borderRadius: 20,
+    padding: 20,
+    gap: 12,
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  modalTitle: {
+  addModalTitle: {
     fontSize: 18,
-    fontFamily: 'Poppins-Bold',
+    fontFamily: "Poppins-Bold",
   },
-  monthHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  monthText: {
-    fontSize: 15,
-    fontFamily: 'Poppins-Bold',
-  },
-  navBtns: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  smallNavBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  daysOfWeekRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  dayOfWeekText: {
-    width: '14.28%',
-    textAlign: 'center',
-    fontSize: 11,
-    fontFamily: 'Poppins-SemiBold',
-  },
-  daysGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 16,
-  },
-  dayCell: {
-    width: '14.28%',
-    height: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dayPill: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dayCellText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
-  },
-  inputLabel: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Bold',
-    marginBottom: 8,
-    marginTop: 6,
-  },
-  timeSlotsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 14,
-  },
-  timeSlotChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  modalInput: {
+    height: 48,
     borderRadius: 12,
     borderWidth: 1,
-    gap: 6,
-  },
-  timeSlotText: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
-  },
-  addressInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    height: 48,
-    gap: 8,
-    marginBottom: 20,
-  },
-  addressInput: {
-    flex: 1,
-    height: '100%',
-    fontSize: 13,
-    fontFamily: 'Poppins-Medium',
-  },
-  donePrimaryBtn: {
-    flexDirection: 'row',
-    height: 50,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 10,
-  },
-  doneBtnText: {
+    paddingHorizontal: 14,
     fontSize: 14,
-    fontFamily: 'Poppins-Bold',
+    fontFamily: "Poppins-Medium",
+  },
+  modalActionsRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 4,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalCancelBtnText: {
+    fontSize: 13,
+    fontFamily: "Poppins-Bold",
+  },
+  modalSubmitBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalSubmitBtnText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontFamily: "Poppins-Bold",
   },
 });

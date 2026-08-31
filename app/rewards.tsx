@@ -55,7 +55,7 @@ export default function RewardsScreen() {
   const C = getColors(isDarkMode);
   const { showAlert, alertProps } = useCustomAlert();
 
-  const [points, setPoints] = useState(725);
+  const [points, setPoints] = useState(2450);
 
   const currentTier =
     TIERS.find((t) => points >= t.min && points <= t.max) ?? TIERS[0];
