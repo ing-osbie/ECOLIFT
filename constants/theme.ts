@@ -1,53 +1,94 @@
-/**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
- */
-
 import { Platform } from 'react-native';
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
-
 export const Colors = {
+  primary: '#0B3D2E',         // Deep Forest Green
+  accent: '#B6FF3C',          // Acid Lime
+  bgGradientStart: '#8AD87D', // Soft pastel mint green matching original theme
+  bgGradientEnd: '#FFFFFF',   // Pure White background fade
+  white: '#FFFFFF',
+  cardBackground: '#FFFFFF',  // Solid White crisp card background
+  greyText: '#6B7C77',        // Soft neutral grey
+  textDark: '#0B1C17',        // Very dark green-black for high contrast text
+  borderLight: '#E5EDE8',     // Soft clean card border
+  shadowColor: '#0B3D2E',
+  success: '#10B981',
+  danger: '#EF4444',
+  warning: '#F59E0B',
+  
+  // Expo defaults compatibility
   light: {
-    text: '#11181C',
-    background: '#fff',
-    tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
-    tabIconSelected: tintColorLight,
+    text: '#0B1C17',
+    background: '#8AD87D',
+    tint: '#0B3D2E',
+    icon: '#6B7C77',
+    tabIconDefault: '#6B7C77',
+    tabIconSelected: '#0B3D2E',
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
-    tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
-    tabIconSelected: tintColorDark,
-  },
+    text: '#FFFFFF',
+    background: '#121212',
+    tint: '#B6FF3C',
+    icon: '#8E8E93',
+    tabIconDefault: '#8E8E93',
+    tabIconSelected: '#B6FF3C',
+  }
 };
 
-export const Fonts = Platform.select({
-  ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
-  },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
-  },
-  web: {
-    sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-    serif: "Georgia, 'Times New Roman', serif",
-    rounded: "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
-    mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-  },
-});
+// Full dark-mode colour palette - Sleek Mid-Black theme (neutral charcoal/black, no green tint)
+export const DarkColors = {
+  primary: '#B6FF3C',                // Acid Lime remains a high-contrast futuristic accent
+  accent: '#B6FF3C',
+  bgGradientStart: '#1C1C1E',        // Charcoal/mid-black start
+  bgGradientEnd: '#0A0A0C',          // Pure dark black end
+  white: '#FFFFFF',
+  cardBackground: '#1E2321',         // Premium dark solid/charcoal card
+  greyText: '#8E8E93',               // Neutral grey
+  textDark: '#FFFFFF',               // Clean white text
+  borderLight: 'rgba(255, 255, 255, 0.08)',  // Subtle translucent white border
+  shadowColor: '#000000',            // Pure black shadows
+  success: '#10B981',
+  danger: '#EF4444',
+  warning: '#F59E0B',
+  buttonPrimary: '#B6FF3C',          // Lime CTA background
+};
+
+// Call this in each screen: const C = getColors(isDarkMode);
+export const getColors = (isDark: boolean) => isDark ? {
+  ...DarkColors,
+  text: DarkColors.textDark,
+  card: DarkColors.cardBackground,
+  border: DarkColors.borderLight,
+  shadow: DarkColors.shadowColor,
+  iconPrimary: DarkColors.primary,
+} : {
+  ...Colors,
+  text: Colors.textDark,
+  card: Colors.cardBackground,
+  border: Colors.borderLight,
+  shadow: Colors.shadowColor,
+  iconPrimary: Colors.primary,
+};
+
+export const Fonts = {
+  heading: 'Poppins-Bold',
+  subheading: 'Poppins-SemiBold',
+  body: 'Poppins-Medium',
+  regular: 'Poppins-Regular',
+};
+
+export const Shadows = {
+  card: (isDark: boolean) => ({
+    shadowColor: isDark ? '#000000' : '#0B3D2E',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: isDark ? 0.25 : 0.03,
+    shadowRadius: 10,
+    elevation: isDark ? 4 : 1,
+  }),
+  glow: {
+    shadowColor: Colors.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 15,
+    elevation: 8,
+  }
+};

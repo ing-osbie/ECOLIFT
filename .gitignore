@@ -33,6 +33,9 @@ yarn-error.*
 # local env files
 .env*.local
 
+# keep the real .env out, but allow .env.example
+.env
+
 # typescript
 *.tsbuildinfo
 

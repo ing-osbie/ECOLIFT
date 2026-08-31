@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Tabs } from 'expo-router';
-import { Home, ClipboardList, BookOpen, User, Scan, CalendarClock } from 'lucide-react-native';
+import { Home, Briefcase, TrendingUp, User } from 'lucide-react-native';
 import { Colors, getColors } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
 
@@ -29,6 +29,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
               target: route.key,
               canPreventDefault: true,
             });
+
             if (!isFocused && !event.defaultPrevented) {
               navigation.navigate(route.name);
             }
@@ -36,18 +37,25 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 
           const getIcon = (color: string, size: number) => {
             switch (route.name) {
-              case 'index': return <Home size={size} color={color} fill={isFocused ? color : 'none'} />;
-              case 'schedule': return <CalendarClock size={size} color={color} />;
-              case 'classify': return <Scan size={size} color={color} />;
-              case 'orders': return <ClipboardList size={size} color={color} fill={isFocused ? color : 'none'} />;
-              case 'learn': return <BookOpen size={size} color={color} fill={isFocused ? color : 'none'} />;
-              case 'profile': return <User size={size} color={color} fill={isFocused ? color : 'none'} />;
-              default: return <Home size={size} color={color} />;
+              case 'index':
+                return <Home size={size} color={color} fill={isFocused ? color : 'none'} />;
+              case 'jobs':
+                return <Briefcase size={size} color={color} fill={isFocused ? color : 'none'} />;
+              case 'earnings':
+                return <TrendingUp size={size} color={color} />;
+              case 'profile':
+                return <User size={size} color={color} fill={isFocused ? color : 'none'} />;
+              default:
+                return <Home size={size} color={color} />;
             }
           };
 
-          const iconColor = isFocused
-            ? (isDarkMode ? '#000000' : '#FFFFFF')
+          const activeButtonStyle = {
+            backgroundColor: C.primary,
+          };
+
+          const iconColor = isFocused 
+            ? (isDarkMode ? '#000000' : '#FFFFFF') 
             : C.greyText;
 
           return (
@@ -56,7 +64,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
               onPress={onPress}
               style={[
                 styles.tabButton,
-                isFocused ? [styles.tabButtonActive, { backgroundColor: C.primary }] : styles.tabButtonInactive
+                isFocused ? [styles.tabButtonActive, activeButtonStyle] : styles.tabButtonInactive
               ]}
               activeOpacity={0.9}
             >
@@ -78,13 +86,13 @@ export default function TabLayout() {
   return (
     <Tabs
       tabBar={(props) => <CustomTabBar {...props} />}
-      screenOptions={{ headerShown: false }}
+      screenOptions={{
+        headerShown: false,
+      }}
     >
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
-      <Tabs.Screen name="schedule" options={{ title: 'Schedule' }} />
-      <Tabs.Screen name="classify" options={{ title: 'Classify' }} />
-      <Tabs.Screen name="orders" options={{ title: 'Orders' }} />
-      <Tabs.Screen name="learn" options={{ title: 'Learn' }} />
+      <Tabs.Screen name="jobs" options={{ title: 'Jobs' }} />
+      <Tabs.Screen name="earnings" options={{ title: 'Earnings' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
     </Tabs>
   );
