@@ -62,6 +62,9 @@ export default function RootLayout() {
           {/* User verification */}
           <Stack.Screen name="upload-id" />
 
+          {/* Driver check-in — declared before tab groups to prevent route collision */}
+          <Stack.Screen name="driver-checkin" />
+
           {/* Main user app */}
           <Stack.Screen name="(tabs)" />
 

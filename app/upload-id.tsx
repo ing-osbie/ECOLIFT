@@ -1,383 +1,335 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Platform, StatusBar } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { GradientBackground } from '@/components/gradient-background';
-import { GlassCard } from '@/components/glass-card';
-import { Colors, getColors } from '@/constants/theme';
+import { ArrowLeft, Camera, Check, FileText, ShieldCheck, Truck } from 'lucide-react-native';
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Colors } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
-import { EcoliftLogo } from '@/components/ecolift-logo';
-import { ArrowLeft, Camera, Check } from 'lucide-react-native';
+
+type SlotState = 'idle' | 'verifying' | 'done';
 
 export default function UploadId() {
   const router = useRouter();
-  const { 
-    frontIdUploaded, 
-    setFrontIdUploaded, 
-    backIdUploaded, 
-    setBackIdUploaded, 
-    setIsCollectorVerified,
-    setIsLoggedIn,
-    isDarkMode
-  } = useApp();
-  const C = getColors(isDarkMode);
+  const { setIsCollectorVerified, setIsLoggedIn } = useApp();
 
+  const [frontUri, setFrontUri] = useState<string | null>(null);
+  const [backUri, setBackUri] = useState<string | null>(null);
+  const [frontState, setFrontState] = useState<SlotState>('idle');
+  const [backState, setBackState] = useState<SlotState>('idle');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionComplete, setSubmissionComplete] = useState(false);
 
-  const handleFrontUpload = () => {
-    setFrontIdUploaded(true);
-    // Visual feedback handled by check state in UI
+  const capturePhoto = async (side: 'front' | 'back') => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) return;
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [16, 10],
+      quality: 0.85,
+    });
+
+    if (result.canceled || !result.assets[0]?.uri) return;
+
+    const uri = result.assets[0].uri;
+
+    if (side === 'front') {
+      setFrontUri(uri);
+      setFrontState('verifying');
+      setTimeout(() => setFrontState('done'), 1800);
+    } else {
+      setBackUri(uri);
+      setBackState('verifying');
+      setTimeout(() => setBackState('done'), 1800);
+    }
   };
 
-  const handleBackUpload = () => {
-    setBackIdUploaded(true);
-    // Visual feedback handled by check state in UI
-  };
+  const canSubmit = frontState === 'done' && backState === 'done';
 
   const handleSubmit = () => {
-    if (!frontIdUploaded || !backIdUploaded) return;
-
+    if (!canSubmit) return;
     setIsSubmitting(true);
-    // Simulate approval delay
     setTimeout(() => {
       setIsSubmitting(false);
       setSubmissionComplete(true);
-      
-      // Instantly approve for smooth demo flow
       setIsCollectorVerified(true);
       setIsLoggedIn(true);
-      
-      setTimeout(() => {
-        router.replace('/(tabs-collector)' as any);
-      }, 1500);
+      setTimeout(() => router.replace('/driver-checkin' as any), 1500);
     }, 2000);
   };
 
-  const canSubmit = frontIdUploaded && backIdUploaded;
-
   return (
-    <GradientBackground style={styles.container}>
+    <View style={styles.bg}>
       <SafeAreaView style={styles.safeArea}>
-        
-        {/* Navigation Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.replace('/login')} style={styles.backBtn} activeOpacity={0.8}>
-            <ArrowLeft size={24} color={C.text} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: C.text }]}>Verification</Text>
-          <View style={{ width: 40 }} />
-        </View>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.card}>
+            <View style={styles.cardHeaderDecor} />
 
-        {/* Logo Header */}
-        <View style={styles.logoHeader}>
-          <EcoliftLogo size={36} showText textColor={C.text} textSize={22} />
-        </View>
+            {/* Header row */}
+            <View style={styles.brandRow}>
+              <TouchableOpacity onPress={() => router.replace('/login')} style={styles.backBtn}>
+                <ArrowLeft size={18} color={Colors.primary} />
+              </TouchableOpacity>
+              <View style={styles.brandCenter}>
+                <View style={styles.logoCircle}>
+                  <Image
+                    source={{ uri: 'https://lh3.googleusercontent.com/aida/AEtjO1XcXV5fbdHGNsqeCGly0UlSej52rtC_mjiNz-wgtk0IBvm41436Cn7_bH9IuDiDvPj1XQSSO44Hr7AyapNiRtQB5kBbalFGbLkan0qIhiWUqxd8wsp5doOx5bEsgKli46jrIB_MALi29-JIacOn2bNGMtxgtTwDyKeQcm2blObJA3fmUpgrt2IV1okVTRPF8nMFwl28EpQTFJGxSZp_CpCW8WoJpcSQKvN-XoqbMu_XpGLQPiuWQgR6DJaPWS5IlNcQiXDOgKPOvw' }}
+                    style={styles.logoImg}
+                  />
+                </View>
+                <Text style={styles.brandName}>EcoLift</Text>
+              </View>
+              <View style={{ width: 36 }} />
+            </View>
 
-        <View style={styles.content}>
-          <GlassCard style={styles.card}>
-            <Text style={[styles.cardTitle, { color: C.text }]}>Identity Verification</Text>
-            <Text style={[styles.cardSubtitle, { color: C.greyText }]}>Ghana Card verification required for collectors</Text>
+            <Text style={styles.title}>Driver Verification</Text>
+            <Text style={styles.subtitle}>Ghana Card verification required to start collecting</Text>
 
-            {/* Dashboard Upload Slots */}
+            <View style={styles.roleBadge}>
+              <Truck size={14} color={Colors.primary} />
+              <Text style={styles.roleBadgeText}>Driver / Collector Account</Text>
+            </View>
+
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>Upload your ID</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Upload Slots */}
             <View style={styles.uploadRow}>
-              {/* Front Slot */}
-              <TouchableOpacity 
-                style={[
-                  styles.uploadSlot,
-                  { 
-                    borderColor: isDarkMode ? '#3A3A3C' : '#D1D5DB', 
-                    backgroundColor: isDarkMode ? 'rgba(255,255,255,0.03)' : '#F9FAFB' 
-                  },
-                  frontIdUploaded && [styles.uploadSlotActive, { borderColor: C.primary, backgroundColor: isDarkMode ? 'rgba(182, 255, 60, 0.08)' : 'rgba(182, 255, 60, 0.04)' }]
-                ]} 
-                onPress={handleFrontUpload}
-                activeOpacity={0.7}
-              >
-                {frontIdUploaded ? (
-                  <View style={styles.slotCompleted}>
-                    <Check size={28} color={isDarkMode ? '#B6FF3C' : Colors.primary} strokeWidth={3} />
-                    <Text style={[styles.slotLabel, { color: C.text }]}>Front Uploaded</Text>
-                  </View>
-                ) : (
-                  <View style={styles.slotEmpty}>
-                    <Camera size={28} color={C.greyText} />
-                    <Text style={[styles.slotLabel, { color: C.greyText }]}>Ghana Card Front</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-
-              {/* Back Slot */}
-              <TouchableOpacity 
-                style={[
-                  styles.uploadSlot,
-                  { 
-                    borderColor: isDarkMode ? '#3A3A3C' : '#D1D5DB', 
-                    backgroundColor: isDarkMode ? 'rgba(255,255,255,0.03)' : '#F9FAFB' 
-                  },
-                  backIdUploaded && [styles.uploadSlotActive, { borderColor: C.primary, backgroundColor: isDarkMode ? 'rgba(182, 255, 60, 0.08)' : 'rgba(182, 255, 60, 0.04)' }]
-                ]} 
-                onPress={handleBackUpload}
-                activeOpacity={0.7}
-              >
-                {backIdUploaded ? (
-                  <View style={styles.slotCompleted}>
-                    <Check size={28} color={isDarkMode ? '#B6FF3C' : Colors.primary} strokeWidth={3} />
-                    <Text style={[styles.slotLabel, { color: C.text }]}>Back Uploaded</Text>
-                  </View>
-                ) : (
-                  <View style={styles.slotEmpty}>
-                    <Camera size={28} color={C.greyText} />
-                    <Text style={[styles.slotLabel, { color: C.greyText }]}>Ghana Card Back</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
+              <IdSlot
+                label="Front Side"
+                uri={frontUri}
+                state={frontState}
+                onCapture={() => capturePhoto('front')}
+              />
+              <IdSlot
+                label="Back Side"
+                uri={backUri}
+                state={backState}
+                onCapture={() => capturePhoto('back')}
+              />
             </View>
 
-            {/* Checklist items below */}
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>Verification steps</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Checklist */}
             <View style={styles.checklist}>
-              <Text style={[styles.checklistTitle, { color: C.text }]}>Verification Steps</Text>
-              
-              {/* Step 1 */}
-              <View style={styles.checkRow}>
-                <View style={[
-                  styles.checkDot, 
-                  { backgroundColor: isDarkMode ? '#2C2C2E' : '#E5E7EB' }, 
-                  canSubmit && { backgroundColor: C.primary }
-                ]}>
-                  {canSubmit && <Check size={12} color={isDarkMode ? '#000000' : '#FFFFFF'} strokeWidth={3} />}
+              {[
+                { label: 'ID Cards Uploaded', done: canSubmit, Icon: FileText },
+                { label: 'Under Review', done: submissionComplete, Icon: ShieldCheck, pending: isSubmitting },
+                { label: 'Approved & Verified', done: submissionComplete, Icon: Check },
+              ].map(({ label, done, Icon, pending }, i) => (
+                <View key={i} style={styles.checkRow}>
+                  <View style={[styles.checkDot, done && styles.checkDotDone, pending && styles.checkDotPending]}>
+                    {done ? <Check size={11} color="#fff" strokeWidth={3} /> : null}
+                  </View>
+                  <View style={styles.checkLineWrap}>
+                    <Icon size={14} color={done ? Colors.primary : '#9CA3AF'} />
+                    <Text style={[styles.checkText, done && styles.checkTextDone]}>{label}</Text>
+                  </View>
                 </View>
-                <Text style={[
-                  styles.checkText, 
-                  { color: C.greyText }, 
-                  canSubmit && [styles.checkTextDone, { color: C.text }]
-                ]}>
-                  ID Cards Uploaded
-                </Text>
-              </View>
-
-              {/* Step 2 */}
-              <View style={styles.checkRow}>
-                <View style={[
-                  styles.checkDot, 
-                  { backgroundColor: isDarkMode ? '#2C2C2E' : '#E5E7EB' }, 
-                  isSubmitting && styles.checkDotPending, 
-                  submissionComplete && { backgroundColor: C.primary }
-                ]}>
-                  {submissionComplete && <Check size={12} color={isDarkMode ? '#000000' : '#FFFFFF'} strokeWidth={3} />}
-                </View>
-                <Text style={[
-                  styles.checkText, 
-                  { color: C.greyText }, 
-                  submissionComplete && [styles.checkTextDone, { color: C.text }]
-                ]}>
-                  Under Review
-                </Text>
-              </View>
-
-              {/* Step 3 */}
-              <View style={styles.checkRow}>
-                <View style={[
-                  styles.checkDot, 
-                  { backgroundColor: isDarkMode ? '#2C2C2E' : '#E5E7EB' }, 
-                  submissionComplete && { backgroundColor: C.primary }
-                ]}>
-                  {submissionComplete && <Check size={12} color={isDarkMode ? '#000000' : '#FFFFFF'} strokeWidth={3} />}
-                </View>
-                <Text style={[
-                  styles.checkText, 
-                  { color: C.greyText }, 
-                  submissionComplete && [styles.checkTextDone, { color: C.text }]
-                ]}>
-                  Approved & Verified
-                </Text>
-              </View>
+              ))}
             </View>
 
-            {/* Bottom button */}
-            <TouchableOpacity 
-              style={[
-                styles.primaryBtn,
-                { backgroundColor: C.primary, shadowColor: C.primary },
-                (!canSubmit || isSubmitting) && { backgroundColor: isDarkMode ? '#2C2C2E' : '#E0E5E2', shadowOpacity: 0, elevation: 0 }
-              ]} 
+            {/* Submit */}
+            <TouchableOpacity
+              style={[styles.primaryBtn, (!canSubmit || isSubmitting) && styles.primaryBtnDisabled]}
               onPress={handleSubmit}
               disabled={!canSubmit || isSubmitting}
               activeOpacity={0.9}
             >
-              <Text style={[
-                styles.btnText,
-                { color: isDarkMode ? '#000000' : '#FFFFFF' },
-                (!canSubmit || isSubmitting) && { color: isDarkMode ? '#5E5E62' : '#9EAEAA' }
-              ]}>
-                {isSubmitting ? 'Verifying Cards...' : 
-                 submissionComplete ? 'Approved! Entering App...' : 
-                 'Submit for Review'}
-              </Text>
+              {isSubmitting ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={[styles.primaryBtnText, (!canSubmit || isSubmitting) && styles.primaryBtnTextDisabled]}>
+                  {submissionComplete ? 'Approved! Entering App...' : 'Submit for Review'}
+                </Text>
+              )}
             </TouchableOpacity>
-          </GlassCard>
-        </View>
 
+            <Text style={styles.termsText}>
+              Your ID is encrypted and only used for verification.{' '}
+              <Text style={styles.termsLink}>Privacy Policy</Text>
+            </Text>
+          </View>
+        </ScrollView>
       </SafeAreaView>
-    </GradientBackground>
+    </View>
+  );
+}
+
+// ── ID Slot component ─────────────────────────────────────────────────────────
+function IdSlot({
+  label,
+  uri,
+  state,
+  onCapture,
+}: {
+  label: string;
+  uri: string | null;
+  state: SlotState;
+  onCapture: () => void;
+}) {
+  const isDone = state === 'done';
+  const isVerifying = state === 'verifying';
+
+  return (
+    <TouchableOpacity
+      style={[styles.uploadSlot, isDone && styles.uploadSlotDone]}
+      onPress={onCapture}
+      activeOpacity={0.85}
+      disabled={isVerifying}
+    >
+      {/* Photo preview */}
+      {uri ? (
+        <Image source={{ uri }} style={styles.slotPhoto} resizeMode="cover" />
+      ) : null}
+
+      {/* Overlay content */}
+      <View style={[styles.slotOverlay, uri && { backgroundColor: 'rgba(0,0,0,0.35)' }]}>
+        {isVerifying ? (
+          <>
+            <ActivityIndicator color="#fff" size="small" />
+            <Text style={styles.slotVerifyText}>Verifying...</Text>
+          </>
+        ) : isDone ? (
+          <>
+            <View style={styles.uploadCheckCircle}>
+              <Check size={20} color="#fff" strokeWidth={3} />
+            </View>
+            <Text style={styles.uploadLabelDone}>✓ Verified</Text>
+            <Text style={styles.slotSideLabel}>{label}</Text>
+          </>
+        ) : (
+          <>
+            <View style={styles.uploadIconBox}>
+              <Camera size={24} color={uri ? '#fff' : '#9CA3AF'} />
+            </View>
+            <Text style={[styles.uploadLabel, uri && { color: '#fff' }]}>Ghana Card</Text>
+            <Text style={[styles.uploadSub, uri && { color: 'rgba(255,255,255,0.8)' }]}>{label}</Text>
+            {uri && <Text style={styles.retakeText}>Tap to retake</Text>}
+          </>
+        )}
+      </View>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  bg: { flex: 1, backgroundColor: '#f0fdf4' },
+  safeArea: { flex: 1 },
+  scroll: { paddingHorizontal: 20, paddingVertical: 24, alignItems: 'center' },
+  card: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#dcfce7',
+    paddingBottom: 28,
   },
-  safeArea: {
-    flex: 1,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-  },
-  header: {
+  cardHeaderDecor: { height: 80, backgroundColor: 'rgba(167,243,208,0.4)', marginBottom: -40 },
+  brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 20,
+    zIndex: 1,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: Colors.shadowColor,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: '#E5E7EB',
   },
-  headerTitle: {
-    fontSize: 20,
-    fontFamily: 'Poppins-Bold',
-    color: Colors.textDark,
+  brandCenter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  logoCircle: {
+    width: 32, height: 32, borderRadius: 16, overflow: 'hidden',
+    backgroundColor: '#fff', shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2,
   },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingBottom: 40,
+  logoImg: { width: '100%', height: '100%' },
+  brandName: { fontSize: 20, fontFamily: 'Poppins-Bold', color: Colors.primary, letterSpacing: -0.5 },
+  title: { fontSize: 20, fontFamily: 'Poppins-Bold', color: '#111827', textAlign: 'center', paddingHorizontal: 20, marginBottom: 4 },
+  subtitle: { fontSize: 12, fontFamily: 'Poppins-Medium', color: '#6B7280', textAlign: 'center', paddingHorizontal: 20, marginBottom: 16 },
+  roleBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'center',
+    backgroundColor: 'rgba(6,78,59,0.08)', paddingHorizontal: 14, paddingVertical: 6,
+    borderRadius: 20, marginBottom: 20,
   },
-  card: {
-    width: '100%',
-    paddingHorizontal: 20,
-    paddingVertical: 28,
-  },
-  cardTitle: {
-    fontSize: 20,
-    fontFamily: 'Poppins-Bold',
-    color: Colors.textDark,
-    textAlign: 'center',
-  },
-  cardSubtitle: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Medium',
-    color: Colors.greyText,
-    textAlign: 'center',
-    marginTop: 4,
-    marginBottom: 28,
-  },
-  uploadRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 28,
-  },
+  roleBadgeText: { fontSize: 12, fontFamily: 'Poppins-SemiBold', color: Colors.primary },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16, paddingHorizontal: 20 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#E5E7EB' },
+  dividerText: { fontSize: 11, fontFamily: 'Poppins-Medium', color: '#9CA3AF' },
+
+  // Upload slots
+  uploadRow: { flexDirection: 'row', gap: 12, marginBottom: 20, paddingHorizontal: 20 },
   uploadSlot: {
-    flex: 1,
-    height: 140,
-    borderRadius: 18,
-    borderWidth: 2,
-    borderColor: '#D1D5DB',
-    borderStyle: 'dashed',
-    backgroundColor: '#F9FAFB',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
+    flex: 1, height: 150, borderRadius: 16,
+    borderWidth: 2, borderColor: '#E5E7EB', borderStyle: 'dashed',
+    backgroundColor: '#F9FAFB', overflow: 'hidden',
   },
-  uploadSlotActive: {
-    borderColor: Colors.primary,
-    borderStyle: 'solid',
-    backgroundColor: 'rgba(182, 255, 60, 0.04)',
+  uploadSlotDone: { borderColor: Colors.primary, borderStyle: 'solid', backgroundColor: 'rgba(6,78,59,0.05)' },
+  slotPhoto: { ...StyleSheet.absoluteFillObject as any, width: '100%', height: '100%' },
+  slotOverlay: {
+    flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, padding: 8,
   },
-  slotEmpty: {
-    alignItems: 'center',
-    gap: 8,
-  },
-  slotCompleted: {
-    alignItems: 'center',
-    gap: 8,
-  },
-  slotLabel: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Bold',
-    color: Colors.textDark,
-    textAlign: 'center',
-  },
-  checklist: {
-    marginBottom: 32,
-    gap: 12,
-  },
-  checklistTitle: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
-    color: Colors.textDark,
-    marginBottom: 4,
-  },
-  checkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  checkDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#E5E7EB',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkDotDone: {
-    backgroundColor: Colors.primary,
-  },
-  checkDotPending: {
-    backgroundColor: Colors.warning,
-  },
-  checkText: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Medium',
-    color: Colors.greyText,
-  },
-  checkTextDone: {
-    color: Colors.textDark,
-    fontFamily: 'Poppins-Bold',
-  },
+  slotVerifyText: { fontSize: 11, fontFamily: 'Poppins-Bold', color: '#fff' },
+  slotSideLabel: { fontSize: 10, fontFamily: 'Poppins-Medium', color: 'rgba(255,255,255,0.85)' },
+  uploadIconBox: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' },
+  uploadCheckCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
+  uploadLabel: { fontSize: 12, fontFamily: 'Poppins-Bold', color: '#374151', textAlign: 'center' },
+  uploadSub: { fontSize: 10, fontFamily: 'Poppins-Medium', color: '#9CA3AF', textAlign: 'center' },
+  uploadLabelDone: { fontSize: 12, fontFamily: 'Poppins-Bold', color: '#fff', textAlign: 'center' },
+  retakeText: { fontSize: 9, fontFamily: 'Poppins-Medium', color: 'rgba(255,255,255,0.7)', textAlign: 'center' },
+
+  // Checklist
+  checklist: { gap: 14, marginBottom: 24, paddingHorizontal: 20 },
+  checkRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  checkDot: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#E5E7EB', alignItems: 'center', justifyContent: 'center' },
+  checkDotDone: { backgroundColor: Colors.primary },
+  checkDotPending: { backgroundColor: '#F59E0B' },
+  checkLineWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  checkText: { fontSize: 13, fontFamily: 'Poppins-Medium', color: '#9CA3AF' },
+  checkTextDone: { fontFamily: 'Poppins-Bold', color: '#111827' },
+
+  // Submit
   primaryBtn: {
-    width: '100%',
-    height: 56,
-    backgroundColor: Colors.primary,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 4,
+    marginHorizontal: 20, height: 52, borderRadius: 14,
+    backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center',
+    shadowColor: Colors.primary, shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2, shadowRadius: 14, elevation: 4, marginBottom: 14,
   },
-  btnText: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
-    color: '#FFFFFF',
-  },
-  logoHeader: {
-    alignItems: 'center',
-    marginBottom: 8,
-    paddingHorizontal: 24,
-  },
+  primaryBtnDisabled: { backgroundColor: '#E5E7EB', shadowOpacity: 0, elevation: 0 },
+  primaryBtnText: { fontSize: 15, fontFamily: 'Poppins-Bold', color: '#FFFFFF' },
+  primaryBtnTextDisabled: { color: '#9CA3AF' },
+  termsText: { fontSize: 11, fontFamily: 'Poppins-Medium', color: '#6B7280', textAlign: 'center', paddingHorizontal: 28, lineHeight: 16 },
+  termsLink: { fontFamily: 'Poppins-SemiBold', color: Colors.primary },
 });

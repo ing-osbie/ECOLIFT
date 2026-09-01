@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Tabs } from 'expo-router';
-import { Home, Briefcase, TrendingUp, User } from 'lucide-react-native';
+import { Home, Truck, TrendingUp, User } from 'lucide-react-native';
 import { Colors, getColors } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
 
@@ -40,7 +40,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
               case 'index':
                 return <Home size={size} color={color} fill={isFocused ? color : 'none'} />;
               case 'jobs':
-                return <Briefcase size={size} color={color} fill={isFocused ? color : 'none'} />;
+                return <Truck size={size} color={color} fill={isFocused ? color : 'none'} />;
               case 'earnings':
                 return <TrendingUp size={size} color={color} />;
               case 'profile':
@@ -91,7 +91,7 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
-      <Tabs.Screen name="jobs" options={{ title: 'Jobs' }} />
+      <Tabs.Screen name="jobs" options={{ title: 'Pickups' }} />
       <Tabs.Screen name="earnings" options={{ title: 'Earnings' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
     </Tabs>
