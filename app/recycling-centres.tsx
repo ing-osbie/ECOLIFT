@@ -14,6 +14,7 @@ import {
 } from "lucide-react-native";
 import React, { useState } from "react";
 import {
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -387,6 +388,17 @@ export default function RecyclingCentresScreen() {
                           },
                         ]}
                         activeOpacity={0.9}
+                        onPress={() => {
+                          const lat = centre.coords.latitude;
+                          const lng = centre.coords.longitude;
+                          const label = encodeURIComponent(centre.name);
+                          const url = Platform.select({
+                            ios: `maps:0,0?q=${label}@${lat},${lng}`,
+                            android: `geo:${lat},${lng}?q=${lat},${lng}(${label})`,
+                            default: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`,
+                          });
+                          if (url) Linking.openURL(url);
+                        }}
                       >
                         <Navigation
                           size={14}

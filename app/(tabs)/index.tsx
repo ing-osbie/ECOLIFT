@@ -147,7 +147,7 @@ const DEFAULT_DISPOSAL_STATIONS: LocationResult[] = [
 
 export default function UserHome() {
   const router = useRouter();
-  const { userName, isDarkMode } = useApp();
+  const { userName, isDarkMode, selectedWasteType, pickupAddress, bagsCount, selectedPaymentMethod, createPickupOrder } = useApp();
   const { user } = useAuth();
   const C = getColors(isDarkMode);
   const { showAlert, alertProps } = useCustomAlert();
@@ -482,7 +482,26 @@ export default function UserHome() {
     });
   };
 
-  const handleConfirmPickup = () => {
+  const handleConfirmPickup = async () => {
+    // Create order in Supabase backend
+    const wasteTypeMap: Record<string, string> = {
+      'Household': 'household',
+      'Recyclables': 'recyclables',
+      'Commercial': 'commercial',
+      'Bulk / Construction': 'bulk_construction',
+    };
+    try {
+      await createPickupOrder({
+        waste_type: (wasteTypeMap[selectedWasteType] || 'household') as any,
+        pickup_address: pickupAddress,
+        bags_count: bagsCount,
+        price: selectedVehicle?.price || 25,
+        payment_method: (selectedPaymentMethod === 'moolre_momo' ? 'momo' : selectedPaymentMethod === 'card' ? 'card' : 'wallet') as any,
+      });
+    } catch (err) {
+      console.warn('Order creation error:', err);
+    }
+
     setViewState("tracking");
     showAlert({
       type: "success",

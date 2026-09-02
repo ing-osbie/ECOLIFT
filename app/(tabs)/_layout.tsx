@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { Home, ClipboardList, BookOpen, User, Scan, CalendarClock } from 'lucide-react-native';
 import { Colors, getColors } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
+import { useAuth } from '@/src/context/AuthContext';
 
 function CustomTabBar({ state, descriptors, navigation }: any) {
   const { isDarkMode } = useApp();
@@ -75,6 +76,18 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 }
 
 export default function TabLayout() {
+  const { user } = useAuth();
+  const { userRole } = useApp();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!user) {
+      router.replace('/login');
+    } else if (userRole === 'collector') {
+      router.replace('/(tabs-collector)');
+    }
+  }, [user, userRole]);
+
   return (
     <Tabs
       tabBar={(props) => <CustomTabBar {...props} />}

@@ -1,3 +1,4 @@
+import { CollectorHeader } from "@/components/collector-header";
 import { CustomAlert, useCustomAlert } from "@/components/custom-alert";
 import { EcoliftMap } from "@/components/ecolift-map";
 import { GlassCard } from "@/components/glass-card";
@@ -35,9 +36,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 export default function CollectorHome() {
   const router = useRouter();
   const { isDarkMode } = useApp();
-  const C = getColors(isDarkMode);
   const { showAlert, alertProps } = useCustomAlert();
 
+  const C = getColors(isDarkMode);
   const [isOnline, setIsOnline] = useState(true);
   const [activeJobState, setActiveJobState] = useState<
     "idle" | "offered" | "navigating" | "payment_pending" | "completed"
@@ -99,12 +100,15 @@ export default function CollectorHome() {
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: "#f9f9ff" }]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: C.screenBg }]}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
+        {/* Header */}
+        <CollectorHeader title="Driver Home" subtitle="Welcome back, Osborn" unread={3} />
+
         {/* Online Status Toggle */}
         <View style={styles.statusRow}>
           <View style={styles.statusLeft}>
@@ -128,35 +132,35 @@ export default function CollectorHome() {
         </View>
 
         {/* Earnings Card */}
-        <View style={styles.earningsCard}>
+        <View style={[styles.earningsCard, { backgroundColor: C.card, borderColor: C.border }]}>
           <View style={styles.earningsTopBar} />
           <View style={styles.earningsHeaderRow}>
             <View>
-              <Text style={styles.earningsLabel}>Today's Earnings</Text>
-              <Text style={styles.earningsAmount}>GH₵ 345.50</Text>
+              <Text style={[styles.earningsLabel, { color: C.greyText }]}>Today's Earnings</Text>
+              <Text style={[styles.earningsAmount, { color: C.text }]}>GH₵ 345.50</Text>
             </View>
-            <View style={styles.growthBadge}>
-              <TrendingUp size={14} color="#006c49" />
-              <Text style={styles.growthText}>+14%</Text>
+            <View style={[styles.growthBadge, { backgroundColor: isDarkMode ? 'rgba(182,255,60,0.12)' : 'rgba(149,211,186,0.2)' }]}>
+              <TrendingUp size={14} color={C.iconPrimary} />
+              <Text style={[styles.growthText, { color: C.iconPrimary }]}>+14%</Text>
             </View>
           </View>
           <View style={styles.statsGrid}>
             {[
-              { icon: <Truck size={18} color="#404944" />, value: "8 Jobs", label: "Done" },
+              { icon: <Truck size={18} color={C.greyText} />, value: "8 Jobs", label: "Done" },
               { icon: <Star size={18} color="#F59E0B" fill="#F59E0B" />, value: "4.9", label: "Rating" },
               { icon: <Zap size={18} color="#8B5CF6" />, value: "24.5 km", label: "Driven" },
             ].map((s, i) => (
-              <View key={i} style={styles.statBox}>
+              <View key={i} style={[styles.statBox, { backgroundColor: C.cardSecondary, borderColor: C.border }]}>
                 {s.icon}
-                <Text style={styles.statValue}>{s.value}</Text>
-                <Text style={styles.statLabel}>{s.label}</Text>
+                <Text style={[styles.statValue, { color: C.text }]}>{s.value}</Text>
+                <Text style={[styles.statLabel, { color: C.greyText }]}>{s.label}</Text>
               </View>
             ))}
           </View>
         </View>
 
         {/* Map Area */}
-        <View style={styles.mapCard}>
+        <View style={[styles.mapCard, { borderColor: C.border }]}>
           <EcoliftMap markers={mapMarkers} routeCoordinates={routePolyline} style={styles.mapView} />
 
           {/* Map Controls */}
@@ -247,20 +251,20 @@ export default function CollectorHome() {
         {/* Quick Actions */}
         <View style={styles.quickGrid}>
           <TouchableOpacity
-            style={styles.quickCard}
+            style={[styles.quickCard, { backgroundColor: C.card, borderColor: C.border }]}
             onPress={() => showAlert({ type: "info", title: "Navigation Active", message: "Centering map on active customer location." })}
           >
-            <Navigation size={22} color="#151c27" />
-            <Text style={styles.quickTitle}>Map Navigation</Text>
-            <Text style={styles.quickSub}>Focus user location</Text>
+            <Navigation size={22} color={C.text} />
+            <Text style={[styles.quickTitle, { color: C.text }]}>Map Navigation</Text>
+            <Text style={[styles.quickSub, { color: C.greyText }]}>Focus user location</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.quickCard}
+            style={[styles.quickCard, { backgroundColor: C.card, borderColor: C.border }]}
             onPress={() => router.push("/(tabs-collector)/earnings" as any)}
           >
-            <DollarSign size={22} color="#006c49" />
-            <Text style={styles.quickTitle}>Earnings</Text>
-            <Text style={styles.quickSub}>Payout history</Text>
+            <DollarSign size={22} color={C.iconPrimary} />
+            <Text style={[styles.quickTitle, { color: C.text }]}>Earnings</Text>
+            <Text style={[styles.quickSub, { color: C.greyText }]}>Payout history</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -271,7 +275,7 @@ export default function CollectorHome() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  scroll: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 120, gap: 14 },
+  scroll: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 120, gap: 14 },
 
   // Status row
   statusRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
@@ -283,10 +287,8 @@ const styles = StyleSheet.create({
 
   // Earnings card
   earningsCard: {
-    backgroundColor: "#fff",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#e2e8f8",
     padding: 16,
     overflow: "hidden",
     shadowColor: "#000",

@@ -12,10 +12,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { Colors } from '@/constants/theme';
+import { Colors, getColors } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
+import { ScreenHeader } from '@/components/screen-header';
+import { PrimaryButton } from '@/components/primary-button';
 import {
-  Bell,
   Camera,
   Check,
   ChevronDown,
@@ -31,7 +32,8 @@ let _cachedScan: 'idle' | 'scanning' | 'verified' = 'idle';
 
 export default function DriverCheckin() {
   const router = useRouter();
-  const { userName } = useApp();
+  const { isDarkMode, userName } = useApp();
+  const C = getColors(isDarkMode);
 
   const [scanState, setScanState] = useState<'idle' | 'scanning' | 'verified'>(_cachedScan);
   const [capturedUri, setCapturedUri] = useState<string | null>(_cachedUri);
@@ -41,39 +43,40 @@ export default function DriverCheckin() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const verifyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync state changes to module cache
   useEffect(() => { _cachedUri = capturedUri; }, [capturedUri]);
   useEffect(() => { _cachedScan = scanState; }, [scanState]);
 
-  // Clear cache when navigating away to collector home
   const clearCache = () => {
     _cachedUri = null;
     _cachedScan = 'idle';
   };
 
   const handleCapture = async () => {
-    // Don't re-open camera if already verified
     if (scanState === 'verified') return;
 
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) return;
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) return;
 
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: false,
-      quality: 0.8,
-    });
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.8,
+      });
 
-    if (!result.canceled && result.assets[0]?.uri) {
-      const uri = result.assets[0].uri;
-      setCapturedUri(uri);
-      _cachedUri = uri;
-      setScanState('scanning');
-      _cachedScan = 'scanning';
-      verifyTimer.current = setTimeout(() => {
-        setScanState('verified');
-        _cachedScan = 'verified';
-      }, 1800);
+      if (!result.canceled && result.assets && result.assets[0]?.uri) {
+        const uri = result.assets[0].uri;
+        setCapturedUri(uri);
+        _cachedUri = uri;
+        setScanState('scanning');
+        _cachedScan = 'scanning';
+        verifyTimer.current = setTimeout(() => {
+          setScanState('verified');
+          _cachedScan = 'verified';
+        }, 1800);
+      }
+    } catch (error) {
+      console.warn('ImagePicker error:', error);
     }
   };
 
@@ -87,28 +90,16 @@ export default function DriverCheckin() {
     }, 1200);
   };
 
-  const initials = userName ? userName.substring(0, 2).toUpperCase() : 'KM';
-
   return (
-    <View style={styles.bg}>
+    <View style={[styles.bg, { backgroundColor: C.screenBg }]}>
       <SafeAreaView style={styles.safeArea}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => router.replace('/upload-id' as any)} activeOpacity={0.8}>
-              <Text style={styles.backArrow}>{'‹'}</Text>
-            </TouchableOpacity>
-            <Text style={styles.headerBrand}>EcoLift</Text>
-          </View>
-          <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.headerIconBtn}>
-              <Bell size={20} color="#151c27" />
-            </TouchableOpacity>
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarText}>{initials}</Text>
-            </View>
-          </View>
-        </View>
+        {/* Screen Header */}
+        <ScreenHeader
+          title="Driver Check-in"
+          subtitle="Identity & Vehicle Verification"
+          showNotificationBell
+          onBack={() => router.replace('/upload-id' as any)}
+        />
 
         <ScrollView
           contentContainerStyle={styles.scroll}
@@ -117,23 +108,21 @@ export default function DriverCheckin() {
           {/* Page Title */}
           <View style={styles.titleRow}>
             <View>
-              <Text style={styles.pageTitle}>Driver Check-in</Text>
-              <Text style={styles.pageSub}>Verify identity and vehicle assignment.</Text>
+              <Text style={[styles.pageTitle, { color: C.text }]}>Verification</Text>
+              <Text style={[styles.pageSub, { color: C.greyText }]}>Verify identity and vehicle assignment.</Text>
             </View>
-            <View style={styles.badgeIcon}>
-              <User size={28} color={Colors.primary} />
+            <View style={[styles.badgeIcon, { backgroundColor: isDarkMode ? 'rgba(182,255,60,0.15)' : 'rgba(11,61,46,0.1)' }]}>
+              <User size={26} color={C.primary} />
             </View>
           </View>
 
           {/* Face Scan Card */}
-          <View style={styles.scanCard}>
-            {/* Camera preview area */}
+          <View style={[styles.scanCard, { backgroundColor: C.card, borderColor: C.border }]}>
             <TouchableOpacity
               style={styles.cameraArea}
               onPress={scanState === 'idle' ? handleCapture : undefined}
               activeOpacity={scanState === 'idle' ? 0.85 : 1}
             >
-              {/* Show captured photo or placeholder */}
               <Image
                 source={capturedUri
                   ? { uri: capturedUri }
@@ -142,10 +131,8 @@ export default function DriverCheckin() {
                 style={styles.cameraImage}
                 resizeMode="cover"
               />
-              {/* Dark overlay — lighter when photo captured */}
               <View style={[styles.cameraOverlay, capturedUri && { backgroundColor: 'rgba(0,0,0,0.15)' }]} />
 
-              {/* Tap to open camera hint when idle */}
               {scanState === 'idle' && (
                 <View style={styles.tapHint}>
                   <Camera size={28} color="#fff" />
@@ -153,7 +140,6 @@ export default function DriverCheckin() {
                 </View>
               )}
 
-              {/* Scanning spinner overlay */}
               {scanState === 'scanning' && (
                 <View style={styles.scanningOverlay}>
                   <ActivityIndicator size="large" color="#fff" />
@@ -161,7 +147,6 @@ export default function DriverCheckin() {
                 </View>
               )}
 
-              {/* Verified checkmark overlay */}
               {scanState === 'verified' && (
                 <View style={styles.verifiedOverlay}>
                   <View style={styles.verifiedCheckCircle}>
@@ -170,94 +155,60 @@ export default function DriverCheckin() {
                   <Text style={styles.verifiedOverlayText}>Identity Verified</Text>
                 </View>
               )}
-
-              {/* Face frame ring */}
-              <View style={styles.faceFrameWrap}>
-                <View style={styles.faceFrameOuter}>
-                  <View style={[
-                    styles.faceFrameInner,
-                    scanState === 'verified' && styles.faceFrameVerified,
-                  ]} />
-                </View>
-              </View>
             </TouchableOpacity>
 
             {/* Status bar */}
-            <View style={styles.scanStatusBar}>
-              <View style={[
-                styles.scanIconCircle,
-                scanState === 'verified' && styles.scanIconCircleVerified,
-              ]}>
+            <View style={[styles.scanStatusBar, { backgroundColor: C.cardSecondary }]}>
+              <View style={[styles.scanIconCircle, scanState === 'verified' && { backgroundColor: C.primary }]}>
                 {scanState === 'scanning' ? (
-                  <ActivityIndicator size="small" color={Colors.primary} />
+                  <ActivityIndicator size="small" color={C.primary} />
                 ) : scanState === 'verified' ? (
-                  <Check size={18} color="#fff" strokeWidth={3} />
+                  <Check size={18} color={isDarkMode ? '#0B3D2E' : '#fff'} strokeWidth={3} />
                 ) : (
-                  <Camera size={18} color="#6B7280" />
+                  <Camera size={18} color={C.greyText} />
                 )}
               </View>
               <View style={styles.scanStatusText}>
-                <Text style={styles.scanStatusTitle}>
+                <Text style={[styles.scanStatusTitle, { color: C.text }]}>
                   {scanState === 'idle' ? 'Ready to Scan' : scanState === 'scanning' ? 'Verifying...' : 'Identity Verified'}
                 </Text>
-                <Text style={styles.scanStatusSub}>
+                <Text style={[styles.scanStatusSub, { color: C.greyText }]}>
                   {scanState === 'idle' ? 'Position face within frame' : scanState === 'scanning' ? 'Please hold still' : `Match found: ${userName || 'Driver'}`}
                 </Text>
               </View>
-              {scanState === 'idle' ? (
-                <TouchableOpacity
-                  style={styles.captureBtn}
-                  onPress={handleCapture}
-                  activeOpacity={0.85}
-                >
-                  <Camera size={20} color="#fff" />
-                </TouchableOpacity>
-              ) : scanState === 'scanning' ? (
-                <View style={[styles.captureBtn, styles.captureBtnDisabled]}>
-                  <ActivityIndicator size="small" color="#fff" />
-                </View>
-              ) : (
-                <TouchableOpacity
-                  style={[styles.captureBtn, styles.captureBtnRetake]}
-                  onPress={() => { setScanState('idle'); setCapturedUri(null); _cachedUri = null; _cachedScan = 'idle'; }}
-                  activeOpacity={0.85}
-                >
-                  <Camera size={16} color="#fff" />
-                </TouchableOpacity>
-              )}
             </View>
           </View>
 
           {/* Vehicle Details Card */}
-          <View style={styles.sectionCard}>
+          <View style={[styles.sectionCard, { backgroundColor: C.card, borderColor: C.border }]}>
             <View style={styles.sectionHeader}>
-              <Truck size={20} color={Colors.primary} />
-              <Text style={styles.sectionTitle}>Vehicle Details</Text>
+              <Truck size={20} color={C.primary} />
+              <Text style={[styles.sectionTitle, { color: C.text }]}>Vehicle Details</Text>
             </View>
 
             {/* Vehicle Type Picker */}
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Vehicle Type</Text>
+              <Text style={[styles.inputLabel, { color: C.greyText }]}>Vehicle Type</Text>
               <TouchableOpacity
-                style={styles.selectBox}
+                style={[styles.selectBox, { backgroundColor: C.cardSecondary, borderColor: C.border }]}
                 onPress={() => setShowVehiclePicker(!showVehiclePicker)}
                 activeOpacity={0.8}
               >
-                <Text style={styles.selectText}>{vehicleType}</Text>
-                <ChevronDown size={16} color="#6B7280" />
+                <Text style={[styles.selectText, { color: C.text }]}>{vehicleType}</Text>
+                <ChevronDown size={16} color={C.greyText} />
               </TouchableOpacity>
               {showVehiclePicker && (
-                <View style={styles.dropdownList}>
+                <View style={[styles.dropdownList, { backgroundColor: C.card, borderColor: C.border }]}>
                   {VEHICLE_TYPES.map((v) => (
                     <TouchableOpacity
                       key={v}
-                      style={[styles.dropdownItem, vehicleType === v && styles.dropdownItemActive]}
+                      style={[styles.dropdownItem, { borderBottomColor: C.border }, vehicleType === v && { backgroundColor: isDarkMode ? 'rgba(182,255,60,0.1)' : 'rgba(11,61,46,0.05)' }]}
                       onPress={() => { setVehicleType(v); setShowVehiclePicker(false); }}
                     >
-                      <Text style={[styles.dropdownItemText, vehicleType === v && styles.dropdownItemTextActive]}>
+                      <Text style={[styles.dropdownItemText, { color: C.text }, vehicleType === v && { color: C.primary, fontFamily: 'Poppins-Bold' }]}>
                         {v}
                       </Text>
-                      {vehicleType === v && <Check size={14} color={Colors.primary} strokeWidth={3} />}
+                      {vehicleType === v && <Check size={14} color={C.primary} strokeWidth={3} />}
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -266,36 +217,26 @@ export default function DriverCheckin() {
 
             {/* License Plate */}
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>License Plate</Text>
+              <Text style={[styles.inputLabel, { color: C.greyText }]}>License Plate</Text>
               <TextInput
-                style={styles.textInput}
+                style={[styles.textInput, { backgroundColor: C.cardSecondary, borderColor: C.border, color: C.text }]}
                 value={plateNumber}
                 onChangeText={setPlateNumber}
                 placeholder="Enter Plate Number"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={C.greyText}
                 autoCapitalize="characters"
               />
             </View>
           </View>
 
-          {/* Confirm Button */}
-          <TouchableOpacity
-            style={[styles.confirmBtn, (scanState !== 'verified' || isSubmitting) && styles.confirmBtnDisabled]}
-            onPress={handleConfirm}
+          {/* Standardized Primary Button */}
+          <PrimaryButton
+            title="Verify & Go to Home"
             disabled={scanState !== 'verified' || isSubmitting}
-            activeOpacity={0.9}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <>
-                <Check size={20} color={scanState === 'verified' ? '#fff' : '#9CA3AF'} strokeWidth={3} />
-                <Text style={[styles.confirmBtnText, (scanState !== 'verified') && styles.confirmBtnTextDisabled]}>
-                  Verify &amp; Go to Home
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
+            loading={isSubmitting}
+            icon={<Check size={18} color={scanState === 'verified' ? (isDarkMode ? '#0B3D2E' : '#fff') : C.greyText} strokeWidth={3} />}
+            onPress={handleConfirm}
+          />
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -303,88 +244,27 @@ export default function DriverCheckin() {
 }
 
 const styles = StyleSheet.create({
-  bg: { flex: 1, backgroundColor: '#f9f9ff' },
+  bg: { flex: 1 },
   safeArea: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    backgroundColor: 'rgba(176,240,214,0.6)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(176,240,214,0.4)',
-  },
-  headerBrand: {
-    fontSize: 22,
-    fontFamily: 'Poppins-Bold',
-    color: Colors.primary,
-    letterSpacing: -0.5,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  backArrow: {
-    fontSize: 22,
-    color: Colors.primary,
-    lineHeight: 26,
-    fontFamily: 'Poppins-Bold',
-  },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  headerIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  avatarCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: { fontSize: 14, fontFamily: 'Poppins-Bold', color: '#fff' },
-  scroll: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40, gap: 16 },
+  scroll: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40, gap: 16 },
   titleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  pageTitle: { fontSize: 24, fontFamily: 'Poppins-Bold', color: '#151c27' },
-  pageSub: { fontSize: 14, fontFamily: 'Poppins-Medium', color: '#404944', marginTop: 2 },
+  pageTitle: { fontSize: 24, fontFamily: 'Poppins-Bold' },
+  pageSub: { fontSize: 13, fontFamily: 'Poppins-Medium', marginTop: 2 },
   badgeIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: 'rgba(149,211,186,0.2)',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
   scanCard: {
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: '#e2e8f8',
+    borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -392,7 +272,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   cameraArea: {
-    height: 280,
+    height: 240,
     position: 'relative',
   },
   cameraImage: {
@@ -403,33 +283,6 @@ const styles = StyleSheet.create({
   cameraOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.35)',
-  },
-  faceFrameWrap: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  faceFrameOuter: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    borderWidth: 2,
-    borderColor: 'rgba(176,240,214,0.9)',
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  faceFrameInner: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    borderWidth: 3,
-    borderColor: 'rgba(176,240,214,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  faceFrameVerified: {
-    borderColor: '#10B981',
   },
   tapHint: {
     ...StyleSheet.absoluteFillObject,
@@ -442,7 +295,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Poppins-Bold',
     color: '#fff',
-    opacity: 0.9,
   },
   scanningOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -466,71 +318,38 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   verifiedCheckCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: '#10B981',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 6,
   },
   verifiedOverlayText: {
     fontSize: 16,
     fontFamily: 'Poppins-Bold',
     color: '#fff',
   },
-  captureBtnRetake: {
-    backgroundColor: '#6B7280',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
   scanStatusBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     padding: 14,
-    backgroundColor: 'rgba(249,249,255,0.95)',
   },
   scanIconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#e7eefe',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  scanIconCircleVerified: {
-    backgroundColor: Colors.primary,
   },
   scanStatusText: { flex: 1 },
-  scanStatusTitle: { fontSize: 14, fontFamily: 'Poppins-Bold', color: '#151c27' },
-  scanStatusSub: { fontSize: 11, fontFamily: 'Poppins-Medium', color: '#404944' },
-  captureBtn: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  captureBtnDisabled: {
-    backgroundColor: '#9CA3AF',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
+  scanStatusTitle: { fontSize: 14, fontFamily: 'Poppins-Bold' },
+  scanStatusSub: { fontSize: 11, fontFamily: 'Poppins-Medium' },
   sectionCard: {
-    backgroundColor: '#e7eefe',
     borderRadius: 16,
     padding: 16,
+    borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
@@ -541,14 +360,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 16,
+    marginBottom: 14,
   },
-  sectionTitle: { fontSize: 18, fontFamily: 'Poppins-Bold', color: '#151c27' },
-  inputGroup: { marginBottom: 14 },
+  sectionTitle: { fontSize: 17, fontFamily: 'Poppins-Bold' },
+  inputGroup: { marginBottom: 12 },
   inputLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: 'Poppins-SemiBold',
-    color: '#404944',
     marginBottom: 6,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
@@ -557,18 +375,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#f9f9ff',
     borderWidth: 1,
-    borderColor: 'rgba(191,201,195,0.4)',
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
-  selectText: { fontSize: 15, fontFamily: 'Poppins-Medium', color: '#151c27' },
+  selectText: { fontSize: 14, fontFamily: 'Poppins-Medium' },
   dropdownList: {
-    backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
     borderRadius: 10,
     marginTop: 4,
     overflow: 'hidden',
@@ -580,45 +394,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
   },
-  dropdownItemActive: { backgroundColor: 'rgba(6,78,59,0.05)' },
-  dropdownItemText: { fontSize: 14, fontFamily: 'Poppins-Medium', color: '#374151' },
-  dropdownItemTextActive: { fontFamily: 'Poppins-Bold', color: Colors.primary },
+  dropdownItemText: { fontSize: 14, fontFamily: 'Poppins-Medium' },
   textInput: {
-    backgroundColor: '#f9f9ff',
     borderWidth: 1,
-    borderColor: 'rgba(191,201,195,0.4)',
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: 'Poppins-Medium',
-    color: '#151c27',
   },
-  confirmBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.primary,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 14,
-    elevation: 5,
-  },
-  confirmBtnDisabled: {
-    backgroundColor: '#E5E7EB',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  confirmBtnText: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
-    color: '#fff',
-  },
-  confirmBtnTextDisabled: { color: '#9CA3AF' },
 });

@@ -2,11 +2,15 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   primary: '#0B3D2E',         // Deep Forest Green
+  primaryHover: '#003527',
   accent: '#B6FF3C',          // Acid Lime
   bgGradientStart: '#8AD87D', // Soft pastel mint green matching original theme
   bgGradientEnd: '#FFFFFF',   // Pure White background fade
+  screenBg: '#F9F9FF',        // Light mode screen background
   white: '#FFFFFF',
   cardBackground: '#FFFFFF',  // Solid White crisp card background
+  cardSecondary: '#F0F3FF',   // Subtle secondary card container
+  chipBg: '#E7EEFE',          // Default filter chip background
   greyText: '#6B7C77',        // Soft neutral grey
   textDark: '#0B1C17',        // Very dark green-black for high contrast text
   borderLight: '#E5EDE8',     // Soft clean card border
@@ -37,11 +41,15 @@ export const Colors = {
 // Full dark-mode colour palette - Sleek Mid-Black theme (neutral charcoal/black, no green tint)
 export const DarkColors = {
   primary: '#B6FF3C',                // Acid Lime remains a high-contrast futuristic accent
+  primaryHover: '#A2E62C',
   accent: '#B6FF3C',
   bgGradientStart: '#1C1C1E',        // Charcoal/mid-black start
   bgGradientEnd: '#0A0A0C',          // Pure dark black end
+  screenBg: '#090D16',               // Dark mode sleek background
   white: '#FFFFFF',
   cardBackground: '#1E2321',         // Premium dark solid/charcoal card
+  cardSecondary: '#151C27',          // Dark secondary card container
+  chipBg: '#28313D',                 // Dark mode filter chip background
   greyText: '#8E8E93',               // Neutral grey
   textDark: '#FFFFFF',               // Clean white text
   borderLight: 'rgba(255, 255, 255, 0.08)',  // Subtle translucent white border
@@ -57,16 +65,24 @@ export const getColors = (isDark: boolean) => isDark ? {
   ...DarkColors,
   text: DarkColors.textDark,
   card: DarkColors.cardBackground,
+  screenBg: DarkColors.screenBg,
+  cardSecondary: DarkColors.cardSecondary,
+  chipBg: DarkColors.chipBg,
   border: DarkColors.borderLight,
   shadow: DarkColors.shadowColor,
   iconPrimary: DarkColors.primary,
+  btnText: '#0B3D2E',
 } : {
   ...Colors,
   text: Colors.textDark,
   card: Colors.cardBackground,
+  screenBg: Colors.screenBg,
+  cardSecondary: Colors.cardSecondary,
+  chipBg: Colors.chipBg,
   border: Colors.borderLight,
   shadow: Colors.shadowColor,
   iconPrimary: Colors.primary,
+  btnText: '#FFFFFF',
 };
 
 export const Fonts = {

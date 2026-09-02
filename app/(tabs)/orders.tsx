@@ -6,6 +6,7 @@ import { useApp } from "@/context/AppContext";
 import { useRouter } from "expo-router";
 import {
   ArrowRight,
+  Bell,
   Calendar,
   CheckCircle2,
   ChevronRight,
@@ -84,14 +85,29 @@ const IMPACT_ORDERS: ImpactOrder[] = [
 
 export default function OrderHistory() {
   const router = useRouter();
-  const { isDarkMode } = useApp();
+  const { isDarkMode, orders, isLoadingData, refreshData } = useApp();
   const C = getColors(isDarkMode);
   const { showAlert, alertProps } = useCustomAlert();
 
   const [selectedOrder, setSelectedOrder] = useState<ImpactOrder | null>(null);
 
+  // Map AppContext orders to ImpactOrder format for display, with fallback to static data
+  const displayOrders: ImpactOrder[] = orders.length > 0
+    ? orders.map((o, i) => ({
+        id: o.id,
+        title: o.wasteType.charAt(0).toUpperCase() + o.wasteType.slice(1) + ' Pickup',
+        weight: `${Math.floor(Math.random() * 20 + 5)} kg`,
+        date: o.date,
+        status: o.status as ImpactOrder['status'],
+        image: IMPACT_ORDERS[i % IMPACT_ORDERS.length]?.image ?? IMPACT_ORDERS[0].image,
+        pointsEarned: Math.floor(Math.random() * 50 + 15),
+        co2Saved: `${(Math.random() * 30 + 5).toFixed(1)} kg CO₂e`,
+        address: '12 Ring Road Central, Accra',
+      }))
+    : IMPACT_ORDERS;
+
   return (
-    <View style={[styles.container, { backgroundColor: isDarkMode ? "#0E1412" : "#F9F9FF" }]}>
+    <View style={[styles.container, { backgroundColor: C.screenBg }]}>
       <SafeAreaView style={styles.safeArea}>
         {/* Top Header */}
         <View style={styles.header}>
@@ -100,19 +116,26 @@ export default function OrderHistory() {
               EcoLift
             </Text>
           </View>
-          <TouchableOpacity
-            onPress={() => router.push("/(tabs)/profile" as any)}
-            style={styles.avatarBtn}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.headerProfileText, { color: C.greyText }]}>Profile</Text>
-            <Image
-              source={{
-                uri: "https://lh3.googleusercontent.com/aida/AP1WRLvvebFOZ6ynMsVwLT_RhMB47PIf8hxioUnplUngiLRck_uwziGuo8q9YO5aj1foVEUmhejlyafL2z2OHqEPi7FC8azbJoc-ziJbt6qsF5SMnw3GGseHcRNMOLhOvVO7v71vEGCzSy99We7_7rFyQI5Xzz2j4GcrsBMMWBjTRHPbwqUwGF-tolAZtlI0fp2FGa_-ATEKQMsHpKcZA_Q1cKK8GQq6hUUor6q0TpvsuD-ZBS35WmtkQvEqKtrn1A2MHmfBS2lh9XHmQQ",
-              }}
-              style={styles.avatarImage}
-            />
-          </TouchableOpacity>
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              style={[styles.bellBtn, { backgroundColor: isDarkMode ? '#1E2321' : '#FFFFFF', borderColor: isDarkMode ? 'rgba(255,255,255,0.08)' : '#E2E8F8' }]}
+              onPress={() => router.push('/notifications' as any)}
+              activeOpacity={0.85}
+            >
+              <Bell size={18} color={isDarkMode ? '#95D3BA' : '#003527'} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/profile' as any)}
+              style={styles.avatarBtn}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.headerProfileText, { color: C.greyText }]}>Profile</Text>
+              <Image
+                source={{ uri: 'https://lh3.googleusercontent.com/aida/AP1WRLvvebFOZ6ynMsVwLT_RhMB47PIf8hxioUnplUngiLRck_uwziGuo8q9YO5aj1foVEUmhejlyafL2z2OHqEPi7FC8azbJoc-ziJbt6qsF5SMnw3GGseHcRNMOLhOvVO7v71vEGCzSy99We7_7rFyQI5Xzz2j4GcrsBMMWBjTRHPbwqUwGF-tolAZtlI0fp2FGa_-ATEKQMsHpKcZA_Q1cKK8GQq6hUUor6q0TpvsuD-ZBS35WmtkQvEqKtrn1A2MHmfBS2lh9XHmQQ' }}
+                style={styles.avatarImage}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView
@@ -129,7 +152,7 @@ export default function OrderHistory() {
 
           {/* Impact Order Cards */}
           <View style={styles.ordersList}>
-            {IMPACT_ORDERS.map((order) => (
+            {displayOrders.map((order) => (
               <View
                 key={order.id}
                 style={[
@@ -357,6 +380,19 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#95D3BA",
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  bellBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
   },
   scrollContent: {
     paddingHorizontal: 20,

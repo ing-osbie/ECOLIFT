@@ -32,6 +32,7 @@ export interface Order {
   payment_method: PaymentMethodType;
   rating?: number | null;
   review?: string | null;
+  special_instructions?: string | null;
   completed_at?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -47,4 +48,5 @@ export interface CreateOrderInput {
   vehicle_type_id?: string;
   price?: number;
   payment_method?: PaymentMethodType;
+  special_instructions?: string;
 }

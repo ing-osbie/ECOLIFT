@@ -1,7 +1,7 @@
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Check, FileText, Shield, Truck } from 'lucide-react-native';
+import { Check, FileText, Shield, Truck } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
   ActionSheetIOS,
@@ -17,12 +17,15 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors } from '@/constants/theme';
+import { Colors, getColors } from '@/constants/theme';
+import { useApp } from '@/context/AppContext';
+import { ScreenHeader } from '@/components/screen-header';
+import { PrimaryButton } from '@/components/primary-button';
 import { CustomAlert, useCustomAlert } from '@/components/custom-alert';
 
 const VEHICLES = [
-  { id: 'tricycle', name: 'Ecolift Tricycle Pro', limit: 'Up to 500kg',   desc: 'Best for narrow streets and standard residential pickups.' },
-  { id: 'minitruck', name: 'Ecolift Mini-Truck',  limit: 'Up to 1.5 Tons', desc: 'Perfect for commercial areas and large-capacity bags.' },
+  { id: 'tricycle', name: 'Ecolift Tricycle Pro', limit: 'Up to 500kg', desc: 'Best for narrow streets and standard residential pickups.' },
+  { id: 'minitruck', name: 'Ecolift Mini-Truck', limit: 'Up to 1.5 Tons', desc: 'Perfect for commercial areas and large-capacity bags.' },
   { id: 'compactor', name: 'Eco Compactor Truck', limit: 'Up to 5.0 Tons', desc: 'Reserved for construction rubble and heavy bulk loads.' },
 ];
 
@@ -30,11 +33,13 @@ type DocSlot = { uri: string | null; name: string | null; isPdf: boolean; verify
 
 export default function VehicleType() {
   const router = useRouter();
+  const { isDarkMode } = useApp();
+  const C = getColors(isDarkMode);
   const { showAlert, alertProps } = useCustomAlert();
 
   const [selected, setSelected] = useState('tricycle');
-  const [plate, setPlate]       = useState('');
-  const [vin, setVin]           = useState('');
+  const [plate, setPlate] = useState('');
+  const [vin, setVin] = useState('');
   const [insurance, setInsurance] = useState<DocSlot>({ uri: null, name: null, isPdf: false, verifying: false, done: false });
   const [roadworthy, setRoadworthy] = useState<DocSlot>({ uri: null, name: null, isPdf: false, verifying: false, done: false });
   const [submitting, setSubmitting] = useState(false);
@@ -43,13 +48,17 @@ export default function VehicleType() {
     const setter = slot === 'insurance' ? setInsurance : setRoadworthy;
 
     const fromCamera = async () => {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) return;
-      const result = await ImagePicker.launchCameraAsync({ quality: 0.8, allowsEditing: false });
-      if (result.canceled || !result.assets[0]?.uri) return;
-      const uri = result.assets[0].uri;
-      setter({ uri, name: null, isPdf: false, verifying: true, done: false });
-      setTimeout(() => setter({ uri, name: null, isPdf: false, verifying: false, done: true }), 1800);
+      try {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) return;
+        const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.8, allowsEditing: false });
+        if (result.canceled || !result.assets || !result.assets[0]?.uri) return;
+        const uri = result.assets[0].uri;
+        setter({ uri, name: null, isPdf: false, verifying: true, done: false });
+        setTimeout(() => setter({ uri, name: null, isPdf: false, verifying: false, done: true }), 1800);
+      } catch (error) {
+        console.warn('ImagePicker error:', error);
+      }
     };
 
     const fromPdf = async () => {
@@ -91,202 +100,211 @@ export default function VehicleType() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+    <View style={[styles.bg, { backgroundColor: C.screenBg }]}>
+      <SafeAreaView style={styles.safe}>
+        <ScreenHeader
+          title="Vehicle Type & Permit"
+          subtitle="Collector Equipment Registration"
+        />
 
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-            <ArrowLeft size={20} color="#003527" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Vehicle Verification</Text>
-          <View style={{ width: 36 }} />
-        </View>
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          {/* Card */}
+          <View style={[styles.card, { backgroundColor: C.card, borderColor: C.border }]}>
+            <View style={[styles.cardHeaderDecor, { backgroundColor: C.primary }]} />
 
-        <Text style={styles.subtitle}>
-          Verify your vehicle details to start accepting larger pickups and increase your earning potential.
-        </Text>
+            <View style={styles.titleGroup}>
+              <Text style={[styles.title, { color: C.text }]}>Vehicle Registration</Text>
+              <Text style={[styles.subtitle, { color: C.greyText }]}>Select vehicle type and attach required permits</Text>
+            </View>
 
-        {/* Vehicle Type Selection */}
-        <Text style={styles.sectionTitle}>Select Vehicle Type</Text>
-        <View style={styles.vehicleList}>
-          {VEHICLES.map((v) => {
-            const active = selected === v.id;
-            return (
-              <TouchableOpacity
-                key={v.id}
-                style={[styles.vehicleCard, active && styles.vehicleCardActive]}
-                onPress={() => setSelected(v.id)}
-                activeOpacity={0.85}
-              >
-                <View style={styles.vehicleIconBox}>
-                  <Truck size={26} color={active ? '#003527' : '#707974'} />
-                </View>
-                <View style={styles.vehicleMeta}>
-                  <View style={styles.vehicleTopRow}>
-                    <Text style={[styles.vehicleName, active && styles.vehicleNameActive]}>{v.name}</Text>
-                    <View style={styles.limitBadge}>
-                      <Text style={styles.limitText}>{v.limit}</Text>
+            {/* Vehicle options */}
+            <View style={styles.vehicleList}>
+              {VEHICLES.map((v) => {
+                const active = selected === v.id;
+                return (
+                  <TouchableOpacity
+                    key={v.id}
+                    style={[
+                      styles.vehicleCard,
+                      { backgroundColor: C.cardSecondary, borderColor: C.border },
+                      active && { borderColor: C.primary, backgroundColor: isDarkMode ? 'rgba(182,255,60,0.1)' : 'rgba(11,61,46,0.05)' },
+                    ]}
+                    onPress={() => setSelected(v.id)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.vehicleHeader}>
+                      <View style={styles.vehicleTitleRow}>
+                        <Truck size={18} color={active ? C.primary : C.greyText} />
+                        <Text style={[styles.vehicleName, { color: C.text }]}>{v.name}</Text>
+                      </View>
+                      <View style={[styles.limitBadge, { backgroundColor: active ? C.primary : C.border }]}>
+                        <Text style={[styles.limitText, { color: active ? (isDarkMode ? '#0B3D2E' : '#FFFFFF') : C.greyText }]}>{v.limit}</Text>
+                      </View>
                     </View>
-                  </View>
-                  <Text style={styles.vehicleDesc}>{v.desc}</Text>
-                </View>
-                {active && (
-                  <View style={styles.activeCheck}>
-                    <Check size={14} color="#fff" strokeWidth={3} />
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+                    <Text style={[styles.vehicleDesc, { color: C.greyText }]}>{v.desc}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
-        {/* Registration Details */}
-        <View style={styles.regCard}>
-          <Text style={styles.sectionTitle}>Registration Details</Text>
+            {/* License plate input */}
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: C.greyText }]}>License Plate Number *</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: C.cardSecondary, borderColor: C.border, color: C.text }]}
+                placeholder="e.g. GRN-2024-GH"
+                placeholderTextColor={C.greyText}
+                value={plate}
+                onChangeText={setPlate}
+                autoCapitalize="characters"
+              />
+            </View>
 
-          <Text style={styles.inputLabel}>License Plate Number</Text>
-          <TextInput
-            style={styles.input}
-            value={plate}
-            onChangeText={setPlate}
-            placeholder="e.g. GT-4921-26"
-            placeholderTextColor="#9CA3AF"
-            autoCapitalize="characters"
-          />
+            {/* VIN optional */}
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: C.greyText }]}>Chassis / VIN Number (Optional)</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: C.cardSecondary, borderColor: C.border, color: C.text }]}
+                placeholder="e.g. 1HGCR2F83HA000000"
+                placeholderTextColor={C.greyText}
+                value={vin}
+                onChangeText={setVin}
+                autoCapitalize="characters"
+              />
+            </View>
 
-          <Text style={styles.inputLabel}>Chassis / VIN Number</Text>
-          <TextInput
-            style={styles.input}
-            value={vin}
-            onChangeText={setVin}
-            placeholder="17-character VIN"
-            placeholderTextColor="#9CA3AF"
-            autoCapitalize="characters"
-          />
+            {/* Permit document uploads */}
+            <Text style={[styles.sectionHeading, { color: C.text }]}>Required Permits & Documents</Text>
 
-          {/* Document Upload */}
-          <Text style={[styles.inputLabel, { marginTop: 8 }]}>Required Documents</Text>
-          <View style={styles.docRow}>
-            <DocUploadSlot
-              label="Vehicle Insurance"
-              slot={insurance}
-              onCapture={() => pickDoc('insurance')}
-            />
-            <DocUploadSlot
-              label="Road Worthiness"
-              slot={roadworthy}
-              onCapture={() => pickDoc('roadworthy')}
+            <View style={styles.docGrid}>
+              <DocTile
+                title="Vehicle Insurance"
+                slot={insurance}
+                onPress={() => pickDoc('insurance')}
+                C={C}
+              />
+              <DocTile
+                title="Roadworthy Cert."
+                slot={roadworthy}
+                onPress={() => pickDoc('roadworthy')}
+                C={C}
+              />
+            </View>
+
+            {/* Submit button */}
+            <PrimaryButton
+              title="Submit Vehicle for Inspection"
+              disabled={!canSubmit || submitting}
+              loading={submitting}
+              icon={<Shield size={18} color="#fff" />}
+              onPress={handleSubmit}
+              style={{ marginTop: 10 }}
             />
           </View>
-        </View>
-
-        {/* Trust badge */}
-        <View style={styles.trustRow}>
-          <Shield size={16} color="#006c49" />
-          <Text style={styles.trustText}>All vehicles must be fully vetted and insured before approval.</Text>
-        </View>
-
-        {/* Submit */}
-        <TouchableOpacity
-          style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
-          onPress={handleSubmit}
-          disabled={!canSubmit || submitting}
-          activeOpacity={0.9}
-        >
-          {submitting ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <Text style={[styles.submitBtnText, !canSubmit && styles.submitBtnTextDisabled]}>
-              Submit for Verification
-            </Text>
-          )}
-        </TouchableOpacity>
-
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
       <CustomAlert {...alertProps} />
-    </SafeAreaView>
+    </View>
   );
 }
 
-function DocUploadSlot({ label, slot, onCapture }: { label: string; slot: DocSlot; onCapture: () => void }) {
-  const hasBg = slot.uri && !slot.isPdf;
+function DocTile({ title, slot, onPress, C }: { title: string; slot: DocSlot; onPress: () => void; C: any }) {
   return (
     <TouchableOpacity
-      style={[styles.docSlot, slot.done && styles.docSlotDone]}
-      onPress={onCapture}
-      disabled={slot.verifying}
-      activeOpacity={0.85}
+      style={[
+        styles.docTile,
+        { backgroundColor: C.cardSecondary, borderColor: C.border },
+        slot.done && { borderColor: Colors.success },
+      ]}
+      onPress={onPress}
+      activeOpacity={0.8}
     >
-      {hasBg ? (
-        <Image source={{ uri: slot.uri! }} style={StyleSheet.absoluteFillObject as any} resizeMode="cover" />
-      ) : null}
-      <View style={[styles.docOverlay, hasBg && { backgroundColor: 'rgba(0,0,0,0.4)' }]}>
-        {slot.verifying ? (
-          <ActivityIndicator color={hasBg ? '#fff' : '#003527'} size="small" />
-        ) : slot.done ? (
-          <View style={styles.docCheck}>
-            <Check size={16} color="#fff" strokeWidth={3} />
+      <View style={styles.docTileHeader}>
+        <Text style={[styles.docTileTitle, { color: C.text }]}>{title}</Text>
+        {slot.done && (
+          <View style={styles.checkIcon}>
+            <Check size={12} color="#fff" strokeWidth={3} />
           </View>
-        ) : (
-          <FileText size={28} color="#6b7280" />
         )}
-        {slot.done && slot.isPdf && slot.name ? (
-          <Text style={styles.docPdfName} numberOfLines={2}>{slot.name}</Text>
-        ) : null}
-        <Text style={[styles.docLabel, hasBg && { color: '#fff' }]}>
-          {slot.done ? '✓ Verified' : label}
-        </Text>
-        {!slot.done && !slot.verifying ? (
-          <Text style={styles.docHint}>Photo or PDF</Text>
-        ) : null}
       </View>
+
+      {slot.verifying ? (
+        <ActivityIndicator size="small" color={C.primary} style={{ marginTop: 8 }} />
+      ) : slot.done ? (
+        <Text style={[styles.docDoneText, { color: Colors.success }]} numberOfLines={1}>
+          {slot.isPdf ? slot.name : '✓ Image Uploaded'}
+        </Text>
+      ) : (
+        <View style={styles.docPlaceholder}>
+          <FileText size={16} color={C.greyText} />
+          <Text style={[styles.docUploadLabel, { color: C.greyText }]}>Tap to Upload</Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f9f9ff' },
-  scroll: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 60, gap: 14 },
-
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E5E7EB' },
-  headerTitle: { fontSize: 18, fontFamily: 'Poppins-Bold', color: '#151c27' },
-  subtitle: { fontSize: 13, fontFamily: 'Poppins-Medium', color: '#404944', lineHeight: 20 },
-
-  sectionTitle: { fontSize: 16, fontFamily: 'Poppins-Bold', color: '#151c27', marginBottom: 10 },
-
+  bg: { flex: 1 },
+  safe: { flex: 1 },
+  scroll: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40 },
+  card: {
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
+    gap: 16,
+  },
+  cardHeaderDecor: {
+    height: 4,
+    marginHorizontal: -20,
+    marginTop: -20,
+  },
+  titleGroup: { gap: 4 },
+  title: { fontSize: 22, fontFamily: 'Poppins-Bold' },
+  subtitle: { fontSize: 13, fontFamily: 'Poppins-Medium' },
   vehicleList: { gap: 10 },
-  vehicleCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 14, backgroundColor: '#fff', borderRadius: 14, borderWidth: 1.5, borderColor: '#E5E7EB', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
-  vehicleCardActive: { borderColor: '#b0f0d6', backgroundColor: '#f0fdf4' },
-  vehicleIconBox: { width: 46, height: 46, borderRadius: 10, backgroundColor: '#e7eefe', alignItems: 'center', justifyContent: 'center' },
-  vehicleMeta: { flex: 1 },
-  vehicleTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 4 },
-  vehicleName: { fontSize: 14, fontFamily: 'Poppins-SemiBold', color: '#404944', flex: 1 },
-  vehicleNameActive: { color: '#003527', fontFamily: 'Poppins-Bold' },
-  limitBadge: { backgroundColor: '#6ffbbe', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
-  limitText: { fontSize: 10, fontFamily: 'Poppins-Bold', color: '#002113' },
-  vehicleDesc: { fontSize: 12, fontFamily: 'Poppins-Medium', color: '#707974', lineHeight: 17 },
-  activeCheck: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#003527', alignItems: 'center', justifyContent: 'center' },
-
-  regCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#E5E7EB', gap: 6 },
-  inputLabel: { fontSize: 13, fontFamily: 'Poppins-Medium', color: '#404944', marginBottom: 4 },
-  input: { height: 48, backgroundColor: '#e7eefe', borderRadius: 10, paddingHorizontal: 14, fontSize: 14, fontFamily: 'Poppins-Medium', color: '#151c27', marginBottom: 10 },
-
-  docRow: { flexDirection: 'row', gap: 12, marginTop: 4 },
-  docSlot: { flex: 1, height: 110, borderRadius: 14, borderWidth: 2, borderColor: '#E5E7EB', borderStyle: 'dashed', backgroundColor: '#f0f3ff', overflow: 'hidden' },
-  docSlotDone: { borderColor: '#003527', borderStyle: 'solid' },
-  docOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, padding: 8 },
-  docCheck: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#003527', alignItems: 'center', justifyContent: 'center' },
-  docLabel: { fontSize: 11, fontFamily: 'Poppins-SemiBold', color: '#404944', textAlign: 'center' },
-  docPdfName: { fontSize: 10, fontFamily: 'Poppins-Medium', color: '#003527', textAlign: 'center', paddingHorizontal: 4 },
-  docHint: { fontSize: 10, fontFamily: 'Poppins-Medium', color: '#9CA3AF', textAlign: 'center' },
-
-  trustRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#e7eefe', padding: 12, borderRadius: 12 },
-  trustText: { fontSize: 12, fontFamily: 'Poppins-Medium', color: '#404944', flex: 1 },
-
-  submitBtn: { height: 54, borderRadius: 27, backgroundColor: '#006c49', alignItems: 'center', justifyContent: 'center', shadowColor: '#006c49', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 14, elevation: 5 },
-  submitBtnDisabled: { backgroundColor: '#E5E7EB', shadowOpacity: 0, elevation: 0 },
-  submitBtnText: { fontSize: 15, fontFamily: 'Poppins-Bold', color: '#fff' },
-  submitBtnTextDisabled: { color: '#9CA3AF' },
+  vehicleCard: {
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1.5,
+    gap: 4,
+  },
+  vehicleHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  vehicleTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  vehicleName: { fontSize: 14, fontFamily: 'Poppins-Bold' },
+  limitBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  limitText: { fontSize: 10, fontFamily: 'Poppins-Bold' },
+  vehicleDesc: { fontSize: 12, fontFamily: 'Poppins-Medium' },
+  inputGroup: { gap: 6 },
+  inputLabel: { fontSize: 11, fontFamily: 'Poppins-SemiBold', textTransform: 'uppercase', letterSpacing: 0.5 },
+  input: {
+    height: 48,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+  },
+  sectionHeading: { fontSize: 15, fontFamily: 'Poppins-Bold', marginTop: 4 },
+  docGrid: { flexDirection: 'row', gap: 12 },
+  docTile: {
+    flex: 1,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    minHeight: 80,
+    justifyContent: 'space-between',
+  },
+  docTileHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  docTileTitle: { fontSize: 12, fontFamily: 'Poppins-Bold' },
+  checkIcon: { width: 18, height: 18, borderRadius: 9, backgroundColor: Colors.success, alignItems: 'center', justifyContent: 'center' },
+  docDoneText: { fontSize: 11, fontFamily: 'Poppins-Bold', marginTop: 6 },
+  docPlaceholder: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
+  docUploadLabel: { fontSize: 11, fontFamily: 'Poppins-Medium' },
 });

@@ -166,6 +166,33 @@ export default function Profile() {
               ACCOUNT SETTINGS
             </Text>
 
+            {/* Edit Profile */}
+            <TouchableOpacity
+              style={styles.settingRow}
+              onPress={() => router.push("/edit-profile" as any)}
+              activeOpacity={0.7}
+            >
+              <View
+                style={[
+                  styles.settingIconCircle,
+                  { backgroundColor: isDarkMode ? "#252E2B" : "#E7EEFE" },
+                ]}
+              >
+                <User size={18} color={isDarkMode ? "#95D3BA" : "#003527"} />
+              </View>
+              <View style={styles.settingInfo}>
+                <Text style={[styles.settingTitle, { color: C.text }]}>
+                  Edit Profile
+                </Text>
+                <Text style={[styles.settingSubtitle, { color: C.greyText }]}>
+                  Update your personal info
+                </Text>
+              </View>
+              <ChevronRight size={18} color={C.greyText} />
+            </TouchableOpacity>
+
+            <View style={[styles.settingDivider, { backgroundColor: isDarkMode ? "#2B3530" : "#E7EEFE" }]} />
+
             {/* Notifications */}
             <TouchableOpacity
               style={styles.settingRow}

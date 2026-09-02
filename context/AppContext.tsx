@@ -14,7 +14,7 @@ import * as schedulesService from "@/src/services/schedules";
 import * as walletService from "@/src/services/wallet";
 import { CollectorJob as DbCollectorJob } from "@/src/types/collector";
 import { NotificationItem as DbNotification } from "@/src/types/notification";
-import { Order as DbOrder } from "@/src/types/order";
+import { Order as DbOrder, CreateOrderInput } from "@/src/types/order";
 import { ScheduledPickup as DbSchedule } from "@/src/types/schedule";
 
 export type BookingStep =
@@ -160,6 +160,14 @@ interface AppContextProps {
   isDarkMode: boolean;
   toggleDarkMode: () => void;
 
+  // EcoPoints
+  ecoPoints: number;
+  setEcoPoints: (points: number) => void;
+  addEcoPoints: (points: number) => void;
+
+  // Create Pickup Order (backend-wired)
+  createPickupOrder: (input: CreateOrderInput) => Promise<DbOrder | null>;
+
   // Data refresh from backend
   refreshData: () => Promise<void>;
   isLoadingData: boolean;
@@ -298,6 +306,10 @@ export const AppContextProvider: React.FC<{
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const toggleDarkMode = () => setIsDarkMode((prev) => !prev);
 
+  // EcoPoints
+  const [ecoPoints, setEcoPoints] = useState<number>(0);
+  const addEcoPoints = (points: number) => setEcoPoints((prev) => prev + points);
+
   // Lists (start empty; populated from backend when authenticated)
   const [orders, setOrders] = useState<Order[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -389,6 +401,24 @@ export const AppContextProvider: React.FC<{
 
   const addOrder = (order: Order) => {
     setOrders((prev) => [order, ...prev]);
+  };
+
+  const createPickupOrder = async (input: CreateOrderInput): Promise<DbOrder | null> => {
+    try {
+      const dbOrder = await ordersService.createOrder(input);
+      if (dbOrder) {
+        addOrder(mapDbOrderToUi(dbOrder));
+        addNotification({
+          title: "Pickup Confirmed",
+          body: `Your ${dbOrder.waste_type} pickup has been booked.`,
+          type: "match",
+        });
+      }
+      return dbOrder;
+    } catch (err) {
+      console.warn("createPickupOrder error:", err);
+      return null;
+    }
   };
 
   const addNotification = (notif: Omit<NotificationItem, "id" | "time">) => {
@@ -625,6 +655,14 @@ export const AppContextProvider: React.FC<{
         // Dark Mode
         isDarkMode,
         toggleDarkMode,
+
+        // EcoPoints
+        ecoPoints,
+        setEcoPoints,
+        addEcoPoints,
+
+        // Create Pickup Order
+        createPickupOrder,
 
         // Data refresh
         refreshData,

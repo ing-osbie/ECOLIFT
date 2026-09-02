@@ -6,6 +6,7 @@ import { useApp } from "@/context/AppContext";
 import { useRouter } from "expo-router";
 import {
   ArrowRight,
+  Bell,
   BookOpen,
   CheckCircle2,
   ChevronRight,
@@ -130,19 +131,26 @@ export default function LearnScreen() {
               EcoLift
             </Text>
           </View>
-          <TouchableOpacity
-            onPress={() => router.push("/(tabs)/profile" as any)}
-            style={styles.avatarBtn}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.headerProfileText, { color: C.greyText }]}>Profile</Text>
-            <Image
-              source={{
-                uri: "https://lh3.googleusercontent.com/aida/AP1WRLvvebFOZ6ynMsVwLT_RhMB47PIf8hxioUnplUngiLRck_uwziGuo8q9YO5aj1foVEUmhejlyafL2z2OHqEPi7FC8azbJoc-ziJbt6qsF5SMnw3GGseHcRNMOLhOvVO7v71vEGCzSy99We7_7rFyQI5Xzz2j4GcrsBMMWBjTRHPbwqUwGF-tolAZtlI0fp2FGa_-ATEKQMsHpKcZA_Q1cKK8GQq6hUUor6q0TpvsuD-ZBS35WmtkQvEqKtrn1A2MHmfBS2lh9XHmQQ",
-              }}
-              style={styles.avatarImage}
-            />
-          </TouchableOpacity>
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              style={[styles.bellBtn, { backgroundColor: isDarkMode ? '#1E2321' : '#FFFFFF', borderColor: isDarkMode ? 'rgba(255,255,255,0.08)' : '#E2E8F8' }]}
+              onPress={() => router.push('/notifications' as any)}
+              activeOpacity={0.85}
+            >
+              <Bell size={18} color={isDarkMode ? '#95D3BA' : '#003527'} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/profile' as any)}
+              style={styles.avatarBtn}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.headerProfileText, { color: C.greyText }]}>Profile</Text>
+              <Image
+                source={{ uri: 'https://lh3.googleusercontent.com/aida/AP1WRLvvebFOZ6ynMsVwLT_RhMB47PIf8hxioUnplUngiLRck_uwziGuo8q9YO5aj1foVEUmhejlyafL2z2OHqEPi7FC8azbJoc-ziJbt6qsF5SMnw3GGseHcRNMOLhOvVO7v71vEGCzSy99We7_7rFyQI5Xzz2j4GcrsBMMWBjTRHPbwqUwGF-tolAZtlI0fp2FGa_-ATEKQMsHpKcZA_Q1cKK8GQq6hUUor6q0TpvsuD-ZBS35WmtkQvEqKtrn1A2MHmfBS2lh9XHmQQ' }}
+                style={styles.avatarImage}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView
@@ -367,6 +375,19 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#95D3BA",
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  bellBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
   },
   scrollContent: {
     paddingHorizontal: 20,

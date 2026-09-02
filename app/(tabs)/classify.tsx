@@ -5,8 +5,10 @@ import { Colors, getColors } from "@/constants/theme";
 import { useApp } from "@/context/AppContext";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
+import { classifyWasteImage, ClassificationResult } from "@/src/services/classification";
 import {
   Camera,
+  Bell,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -35,16 +37,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-interface ClassificationItem {
-  name: string;
-  category: string;
-  binType: string;
-  binColor: string;
-  confidence: number;
-  recyclable: boolean;
-  tips: string[];
-}
-
 const DEFAULT_SAMPLE_IMAGE =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuBl_Oit2XmgYy5LVWz4DdRu8kGddpmPr2JRWVNcsx39oC-WIXl4n2jA3paKJMwWqJWuy4birgLzsraIAAT1kUl327g3i_4SQsUr7GKgHEDfO6WHR-eKTDYwYCRnHX6zlfQ2EKm7wALV6rH_3dMNHJrFR6xQc57JAeTaYEaQ6iCaY5S1fz4cRL5oh0zkQ3yT_mZcVvJ9Jp0x7OvlIK_5BXFHYs-Knw7QmjX4puHrhLTT16Dk9554BOPr";
 
@@ -65,7 +57,7 @@ const SCAN_HISTORY = [
   },
 ];
 
-const MOCK_RESULTS: ClassificationItem[] = [
+const MOCK_RESULTS: ClassificationResult[] = [
   {
     name: "PET Plastic Bottle",
     category: "Plastic",
@@ -118,7 +110,7 @@ export default function ClassifyScreen() {
   const [activeImageUri, setActiveImageUri] = useState<string>(DEFAULT_SAMPLE_IMAGE);
   const [isFlashOn, setIsFlashOn] = useState<boolean>(false);
   const [scanStatus, setScanStatus] = useState<"scanning" | "identifying" | "matched">("matched");
-  const [currentResult, setCurrentResult] = useState<ClassificationItem>(MOCK_RESULTS[0]);
+  const [currentResult, setCurrentResult] = useState<ClassificationResult>(MOCK_RESULTS[0]);
 
   // Animations
   const scanLineAnim = useRef(new Animated.Value(0)).current;
@@ -167,41 +159,45 @@ export default function ClassifyScreen() {
   };
 
   const handlePickImage = async (fromCamera: boolean) => {
-    const permission = fromCamera
-      ? await ImagePicker.requestCameraPermissionsAsync()
-      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    try {
+      const permission = fromCamera
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-    if (permission.status !== "granted") {
-      showAlert({
-        type: "error",
-        title: "Permission Required",
-        message: fromCamera
-          ? "Camera permission is required to scan items."
-          : "Media library permission is required to pick an image.",
-      });
-      return;
-    }
-
-    const picked = fromCamera
-      ? await ImagePicker.launchCameraAsync({
-          mediaTypes: ["images"],
-          quality: 0.8,
-          allowsEditing: true,
-          aspect: [4, 3],
-        })
-      : await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ["images"],
-          quality: 0.8,
-          allowsEditing: true,
-          aspect: [4, 3],
+      if (permission.status !== "granted") {
+        showAlert({
+          type: "error",
+          title: "Permission Required",
+          message: fromCamera
+            ? "Camera permission is required to scan items."
+            : "Media library permission is required to pick an image.",
         });
+        return;
+      }
 
-    if (!picked.canceled && picked.assets[0]) {
-      setActiveImageUri(picked.assets[0].uri);
-      const randomResult =
-        MOCK_RESULTS[Math.floor(Math.random() * MOCK_RESULTS.length)];
-      setCurrentResult(randomResult);
-      startScanningAnimation();
+      const picked = fromCamera
+        ? await ImagePicker.launchCameraAsync({
+            mediaTypes: ["images"],
+            quality: 0.8,
+            allowsEditing: Platform.OS !== 'web',
+            aspect: [4, 3],
+          })
+        : await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ["images"],
+            quality: 0.8,
+            allowsEditing: Platform.OS !== 'web',
+            aspect: [4, 3],
+          });
+
+      if (!picked.canceled && picked.assets && picked.assets[0]) {
+        const uri = picked.assets[0].uri;
+        setActiveImageUri(uri);
+        startScanningAnimation();
+        const result = await classifyWasteImage(uri);
+        setCurrentResult(result);
+      }
+    } catch (error) {
+      console.warn('ImagePicker error:', error);
     }
   };
 
@@ -211,6 +207,7 @@ export default function ClassifyScreen() {
       title: "Item Logged! +25 Eco-Points",
       message: `${currentResult.name} was added to your recycling log.`,
     });
+    // TODO: Persist classification to Supabase classification_logs table
   };
 
   return (
@@ -223,19 +220,26 @@ export default function ClassifyScreen() {
               EcoLift
             </Text>
           </View>
-          <TouchableOpacity
-            onPress={() => router.push("/(tabs)/profile" as any)}
-            style={styles.avatarBtn}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.headerProfileText, { color: C.greyText }]}>Profile</Text>
-            <Image
-              source={{
-                uri: "https://lh3.googleusercontent.com/aida/AP1WRLvvebFOZ6ynMsVwLT_RhMB47PIf8hxioUnplUngiLRck_uwziGuo8q9YO5aj1foVEUmhejlyafL2z2OHqEPi7FC8azbJoc-ziJbt6qsF5SMnw3GGseHcRNMOLhOvVO7v71vEGCzSy99We7_7rFyQI5Xzz2j4GcrsBMMWBjTRHPbwqUwGF-tolAZtlI0fp2FGa_-ATEKQMsHpKcZA_Q1cKK8GQq6hUUor6q0TpvsuD-ZBS35WmtkQvEqKtrn1A2MHmfBS2lh9XHmQQ",
-              }}
-              style={styles.avatarImage}
-            />
-          </TouchableOpacity>
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              style={[styles.bellBtn, { backgroundColor: isDarkMode ? '#1E2321' : '#FFFFFF', borderColor: isDarkMode ? 'rgba(255,255,255,0.08)' : '#E2E8F8' }]}
+              onPress={() => router.push('/notifications' as any)}
+              activeOpacity={0.85}
+            >
+              <Bell size={18} color={isDarkMode ? '#95D3BA' : '#003527'} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/profile' as any)}
+              style={styles.avatarBtn}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.headerProfileText, { color: C.greyText }]}>Profile</Text>
+              <Image
+                source={{ uri: 'https://lh3.googleusercontent.com/aida/AP1WRLvvebFOZ6ynMsVwLT_RhMB47PIf8hxioUnplUngiLRck_uwziGuo8q9YO5aj1foVEUmhejlyafL2z2OHqEPi7FC8azbJoc-ziJbt6qsF5SMnw3GGseHcRNMOLhOvVO7v71vEGCzSy99We7_7rFyQI5Xzz2j4GcrsBMMWBjTRHPbwqUwGF-tolAZtlI0fp2FGa_-ATEKQMsHpKcZA_Q1cKK8GQq6hUUor6q0TpvsuD-ZBS35WmtkQvEqKtrn1A2MHmfBS2lh9XHmQQ' }}
+                style={styles.avatarImage}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Viewfinder Main View */}
@@ -537,6 +541,19 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#95D3BA",
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  bellBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
   },
   viewfinderContainer: {
     flex: 1,
