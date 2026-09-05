@@ -1,7 +1,5 @@
 import { CustomAlert, useCustomAlert } from "@/components/custom-alert";
-import { GlassCard } from "@/components/glass-card";
-import { GradientBackground } from "@/components/gradient-background";
-import { Colors, getColors } from "@/constants/theme";
+import { getColors } from "@/constants/theme";
 import { useApp } from "@/context/AppContext";
 import { useRouter } from "expo-router";
 import {
@@ -9,21 +7,14 @@ import {
   Bell,
   Calendar,
   CheckCircle2,
-  ChevronRight,
-  Clock,
-  MapPin,
   Scale,
-  ShieldCheck,
-  Sparkles,
   Truck,
   X,
 } from "lucide-react-native";
 import React, { useState } from "react";
 import {
-  Dimensions,
   Image,
   Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -85,26 +76,32 @@ const IMPACT_ORDERS: ImpactOrder[] = [
 
 export default function OrderHistory() {
   const router = useRouter();
-  const { isDarkMode, orders, isLoadingData, refreshData } = useApp();
+  const { isDarkMode, orders } = useApp();
   const C = getColors(isDarkMode);
   const { showAlert, alertProps } = useCustomAlert();
 
   const [selectedOrder, setSelectedOrder] = useState<ImpactOrder | null>(null);
 
   // Map AppContext orders to ImpactOrder format for display, with fallback to static data
-  const displayOrders: ImpactOrder[] = orders.length > 0
-    ? orders.map((o, i) => ({
-        id: o.id,
-        title: o.wasteType.charAt(0).toUpperCase() + o.wasteType.slice(1) + ' Pickup',
-        weight: `${Math.floor(Math.random() * 20 + 5)} kg`,
-        date: o.date,
-        status: o.status as ImpactOrder['status'],
-        image: IMPACT_ORDERS[i % IMPACT_ORDERS.length]?.image ?? IMPACT_ORDERS[0].image,
-        pointsEarned: Math.floor(Math.random() * 50 + 15),
-        co2Saved: `${(Math.random() * 30 + 5).toFixed(1)} kg CO₂e`,
-        address: '12 Ring Road Central, Accra',
-      }))
-    : IMPACT_ORDERS;
+  const displayOrders: ImpactOrder[] =
+    orders.length > 0
+      ? orders.map((o, i) => ({
+          id: o.id,
+          title:
+            o.wasteType.charAt(0).toUpperCase() +
+            o.wasteType.slice(1) +
+            " Pickup",
+          weight: `${Math.floor(Math.random() * 20 + 5)} kg`,
+          date: o.date,
+          status: o.status as ImpactOrder["status"],
+          image:
+            IMPACT_ORDERS[i % IMPACT_ORDERS.length]?.image ??
+            IMPACT_ORDERS[0].image,
+          pointsEarned: Math.floor(Math.random() * 50 + 15),
+          co2Saved: `${(Math.random() * 30 + 5).toFixed(1)} kg CO₂e`,
+          address: "12 Ring Road Central, Accra",
+        }))
+      : IMPACT_ORDERS;
 
   return (
     <View style={[styles.container, { backgroundColor: C.screenBg }]}>
@@ -112,26 +109,43 @@ export default function OrderHistory() {
         {/* Top Header */}
         <View style={styles.header}>
           <View style={styles.brandRow}>
-            <Text style={[styles.brandTitle, { color: isDarkMode ? "#95D3BA" : "#003527" }]}>
+            <Text
+              style={[
+                styles.brandTitle,
+                { color: isDarkMode ? "#95D3BA" : "#003527" },
+              ]}
+            >
               EcoLift
             </Text>
           </View>
           <View style={styles.headerRight}>
             <TouchableOpacity
-              style={[styles.bellBtn, { backgroundColor: isDarkMode ? '#1E2321' : '#FFFFFF', borderColor: isDarkMode ? 'rgba(255,255,255,0.08)' : '#E2E8F8' }]}
-              onPress={() => router.push('/notifications' as any)}
+              style={[
+                styles.bellBtn,
+                {
+                  backgroundColor: isDarkMode ? "#1E2321" : "#FFFFFF",
+                  borderColor: isDarkMode
+                    ? "rgba(255,255,255,0.08)"
+                    : "#E2E8F8",
+                },
+              ]}
+              onPress={() => router.push("/notifications" as any)}
               activeOpacity={0.85}
             >
-              <Bell size={18} color={isDarkMode ? '#95D3BA' : '#003527'} />
+              <Bell size={18} color={isDarkMode ? "#95D3BA" : "#003527"} />
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => router.push('/(tabs)/profile' as any)}
+              onPress={() => router.push("/(tabs)/profile" as any)}
               style={styles.avatarBtn}
               activeOpacity={0.8}
             >
-              <Text style={[styles.headerProfileText, { color: C.greyText }]}>Profile</Text>
+              <Text style={[styles.headerProfileText, { color: C.greyText }]}>
+                Profile
+              </Text>
               <Image
-                source={{ uri: 'https://lh3.googleusercontent.com/aida/AP1WRLvvebFOZ6ynMsVwLT_RhMB47PIf8hxioUnplUngiLRck_uwziGuo8q9YO5aj1foVEUmhejlyafL2z2OHqEPi7FC8azbJoc-ziJbt6qsF5SMnw3GGseHcRNMOLhOvVO7v71vEGCzSy99We7_7rFyQI5Xzz2j4GcrsBMMWBjTRHPbwqUwGF-tolAZtlI0fp2FGa_-ATEKQMsHpKcZA_Q1cKK8GQq6hUUor6q0TpvsuD-ZBS35WmtkQvEqKtrn1A2MHmfBS2lh9XHmQQ' }}
+                source={{
+                  uri: "https://lh3.googleusercontent.com/aida/AP1WRLvvebFOZ6ynMsVwLT_RhMB47PIf8hxioUnplUngiLRck_uwziGuo8q9YO5aj1foVEUmhejlyafL2z2OHqEPi7FC8azbJoc-ziJbt6qsF5SMnw3GGseHcRNMOLhOvVO7v71vEGCzSy99We7_7rFyQI5Xzz2j4GcrsBMMWBjTRHPbwqUwGF-tolAZtlI0fp2FGa_-ATEKQMsHpKcZA_Q1cKK8GQq6hUUor6q0TpvsuD-ZBS35WmtkQvEqKtrn1A2MHmfBS2lh9XHmQQ",
+                }}
                 style={styles.avatarImage}
               />
             </TouchableOpacity>
@@ -144,7 +158,9 @@ export default function OrderHistory() {
         >
           {/* Title and Subtitle */}
           <View style={styles.titleSection}>
-            <Text style={[styles.headingTitle, { color: C.text }]}>Your Impact Log</Text>
+            <Text style={[styles.headingTitle, { color: C.text }]}>
+              Your Impact Log
+            </Text>
             <Text style={[styles.headingSub, { color: C.greyText }]}>
               A record of your environmental contributions.
             </Text>
@@ -165,7 +181,10 @@ export default function OrderHistory() {
               >
                 {/* Hero Card Image */}
                 <View style={styles.cardImageWrapper}>
-                  <Image source={{ uri: order.image }} style={styles.cardImage} />
+                  <Image
+                    source={{ uri: order.image }}
+                    style={styles.cardImage}
+                  />
 
                   {/* Verified Badge */}
                   <View style={styles.verifiedBadge}>
@@ -209,10 +228,18 @@ export default function OrderHistory() {
                     onPress={() => setSelectedOrder(order)}
                     activeOpacity={0.85}
                   >
-                    <Text style={[styles.viewDetailsText, { color: isDarkMode ? "#95D3BA" : "#003527" }]}>
+                    <Text
+                      style={[
+                        styles.viewDetailsText,
+                        { color: isDarkMode ? "#95D3BA" : "#003527" },
+                      ]}
+                    >
                       View Details
                     </Text>
-                    <ArrowRight size={16} color={isDarkMode ? "#95D3BA" : "#003527"} />
+                    <ArrowRight
+                      size={16}
+                      color={isDarkMode ? "#95D3BA" : "#003527"}
+                    />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -262,10 +289,14 @@ export default function OrderHistory() {
                   <View style={styles.modalBody}>
                     <View style={styles.modalTopRow}>
                       <View>
-                        <Text style={[styles.modalOrderTitle, { color: C.text }]}>
+                        <Text
+                          style={[styles.modalOrderTitle, { color: C.text }]}
+                        >
                           {selectedOrder.title}
                         </Text>
-                        <Text style={[styles.modalOrderDate, { color: C.greyText }]}>
+                        <Text
+                          style={[styles.modalOrderDate, { color: C.greyText }]}
+                        >
                           {selectedOrder.date} • {selectedOrder.weight}
                         </Text>
                       </View>
@@ -287,29 +318,42 @@ export default function OrderHistory() {
                       ]}
                     >
                       <View style={styles.modalInfoRow}>
-                        <Text style={[styles.modalInfoLabel, { color: C.greyText }]}>
+                        <Text
+                          style={[styles.modalInfoLabel, { color: C.greyText }]}
+                        >
                           CO₂ Diverted:
                         </Text>
-                        <Text style={[styles.modalInfoValue, { color: "#006C49" }]}>
+                        <Text
+                          style={[styles.modalInfoValue, { color: "#006C49" }]}
+                        >
                           {selectedOrder.co2Saved}
                         </Text>
                       </View>
 
                       <View style={styles.modalInfoRow}>
-                        <Text style={[styles.modalInfoLabel, { color: C.greyText }]}>
+                        <Text
+                          style={[styles.modalInfoLabel, { color: C.greyText }]}
+                        >
                           Eco-Points Earned:
                         </Text>
-                        <Text style={[styles.modalInfoValue, { color: "#006C49" }]}>
+                        <Text
+                          style={[styles.modalInfoValue, { color: "#006C49" }]}
+                        >
                           +{selectedOrder.pointsEarned} Pts
                         </Text>
                       </View>
 
                       <View style={styles.modalInfoRow}>
-                        <Text style={[styles.modalInfoLabel, { color: C.greyText }]}>
+                        <Text
+                          style={[styles.modalInfoLabel, { color: C.greyText }]}
+                        >
                           Location:
                         </Text>
                         <Text
-                          style={[styles.modalInfoValue, { color: C.text, flex: 1, textAlign: "right" }]}
+                          style={[
+                            styles.modalInfoValue,
+                            { color: C.text, flex: 1, textAlign: "right" },
+                          ]}
                         >
                           {selectedOrder.address}
                         </Text>
@@ -317,18 +361,24 @@ export default function OrderHistory() {
                     </View>
 
                     <TouchableOpacity
-                      style={[styles.modalDoneBtn, { backgroundColor: "#003527" }]}
+                      style={[
+                        styles.modalDoneBtn,
+                        { backgroundColor: "#003527" },
+                      ]}
                       onPress={() => {
                         setSelectedOrder(null);
                         showAlert({
                           type: "success",
                           title: "Receipt Sent",
-                          message: "Your recycling impact certificate has been sent to your email.",
+                          message:
+                            "Your recycling impact certificate has been sent to your email.",
                         });
                       }}
                       activeOpacity={0.9}
                     >
-                      <Text style={styles.modalDoneBtnText}>Download Receipt</Text>
+                      <Text style={styles.modalDoneBtnText}>
+                        Download Receipt
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 </>
@@ -382,16 +432,16 @@ const styles = StyleSheet.create({
     borderColor: "#95D3BA",
   },
   headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   bellBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
   },
   scrollContent: {

@@ -217,7 +217,7 @@ function NotifCard({ item, isDarkMode, C }: { item: Notif; isDarkMode: boolean; 
 
 export default function Notifications() {
   const router = useRouter();
-  const { isDarkMode, notifications: appNotifs, clearNotifications } = useApp();
+  const { isDarkMode, notifications: appNotifs } = useApp();
   const C = getColors(isDarkMode);
   const { role } = useLocalSearchParams<{ role?: string }>();
   const isCollector = role === 'collector';
@@ -230,8 +230,11 @@ export default function Notifications() {
         body: n.body,
         time: n.time,
         icon: n.type === 'payment' ? 'wallet' : n.type === 'match' ? 'truck' : 'bell',
-        color: n.type === 'payment' ? '#10B981' : n.type === 'match' ? '#0B3D2E' : '#F59E0B',
-        category: n.type === 'payment' ? 'Payment' : n.type === 'match' ? 'Pickup' : 'System',
+        iconBg: n.type === 'payment' ? '#dce2f3' : n.type === 'match' ? '#6cf8bb' : '#ffdad6',
+        iconColor: n.type === 'payment' ? '#404944' : n.type === 'match' ? '#00714d' : '#ba1a1a',
+        accentColor: n.type === 'match' ? '#006c49' : null,
+        read: false,
+        actions: [],
       }))
     : (isCollector ? COLLECTOR_NOTIFS : CUSTOMER_NOTIFS);
 

@@ -389,8 +389,8 @@ export default function RecyclingCentresScreen() {
                         ]}
                         activeOpacity={0.9}
                         onPress={() => {
-                          const lat = centre.coords.latitude;
-                          const lng = centre.coords.longitude;
+                          const lat = centre.lat;
+                          const lng = centre.lng;
                           const label = encodeURIComponent(centre.name);
                           const url = Platform.select({
                             ios: `maps:0,0?q=${label}@${lat},${lng}`,

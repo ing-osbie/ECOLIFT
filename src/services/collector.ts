@@ -255,16 +255,94 @@ export async function findNearbyCollectors(
 export async function getCollectorEarnings(
   collectorId?: string,
 ): Promise<CollectorEarnings | null> {
-  const { data, error } = await supabase.rpc("get_collector_earnings", {
-    p_collector_id: collectorId ?? null,
-  });
+  // 1. Try atomic RPC function
+  try {
+    const { data, error } = await supabase.rpc("get_collector_earnings", {
+      p_collector_id: collectorId ?? null,
+    });
 
-  if (error) {
-    console.error("Error fetching collector earnings:", error.message);
-    return null;
+    if (!error && data) {
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row) {
+        return {
+          total_earnings: Number(row.total_earnings) || 0,
+          week_earnings: Number(row.week_earnings) || 0,
+          month_earnings: Number(row.month_earnings) || 0,
+          total_jobs: Number(row.total_jobs) || 0,
+          completed_jobs: Number(row.completed_jobs) || 0,
+        };
+      }
+    }
+
+    if (error) {
+      console.warn(
+        "RPC get_collector_earnings warning:",
+        error.message,
+        "— attempting direct query fallback.",
+      );
+    }
+  } catch (rpcErr) {
+    console.warn("RPC get_collector_earnings exception, falling back:", rpcErr);
   }
 
-  return data as CollectorEarnings;
+  // 2. Resilient fallback: compute directly from wallet_transactions & collector_jobs
+  try {
+    const targetId = collectorId || (await getCurrentUserId());
+    if (!targetId) return null;
+
+    const now = new Date();
+    // Monday as start of week
+    const startOfWeek = new Date(now);
+    const day = startOfWeek.getDay();
+    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
+    startOfWeek.setDate(diff);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    // 1st of month as start of month
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const [txRes, jobsRes] = await Promise.all([
+      supabase
+        .from("wallet_transactions")
+        .select("amount, type, created_at")
+        .eq("user_id", targetId)
+        .eq("type", "credit"),
+      supabase
+        .from("collector_jobs")
+        .select("id, status")
+        .eq("collector_id", targetId),
+    ]);
+
+    let totalEarnings = 0;
+    let weekEarnings = 0;
+    let monthEarnings = 0;
+
+    if (txRes.data) {
+      for (const tx of txRes.data) {
+        const amt = Number(tx.amount) || 0;
+        const txDate = new Date(tx.created_at);
+        totalEarnings += amt;
+        if (txDate >= startOfWeek) weekEarnings += amt;
+        if (txDate >= startOfMonth) monthEarnings += amt;
+      }
+    }
+
+    const totalJobs = jobsRes.data ? jobsRes.data.length : 0;
+    const completedJobs = jobsRes.data
+      ? jobsRes.data.filter((j) => j.status === "completed").length
+      : 0;
+
+    return {
+      total_earnings: totalEarnings,
+      week_earnings: weekEarnings,
+      month_earnings: monthEarnings,
+      total_jobs: totalJobs,
+      completed_jobs: completedJobs,
+    };
+  } catch (fallbackErr) {
+    console.error("Error calculating collector earnings fallback:", fallbackErr);
+    return null;
+  }
 }
 
 /**

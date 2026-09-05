@@ -68,10 +68,14 @@ export default function EditProfileScreen() {
     try {
       let finalAvatarUrl = null;
       if (avatarUri) {
-        finalAvatarUrl = await uploadAvatar(user.id, avatarUri);
+        finalAvatarUrl = await uploadAvatar(avatarUri);
       }
 
-      await updateProfile(user.id, { full_name: name, phone: phone });
+      await updateProfile({
+        full_name: name,
+        phone: phone,
+        ...(finalAvatarUrl ? { avatar_url: finalAvatarUrl } : {}),
+      });
       
       setUserName(name);
       setUserPhone(phone);

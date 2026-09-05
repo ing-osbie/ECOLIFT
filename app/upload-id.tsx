@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
   slotVerifying: { borderColor: Colors.warning, borderStyle: 'solid' },
   slotDone: { borderColor: Colors.success, borderStyle: 'solid' },
   slotImage: { width: '100%', height: '100%' },
-  slotPlaceholder: { flex: 1, alignItems: 'center', justify: 'center', padding: 12, gap: 4 },
+  slotPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 12, gap: 4 },
   cameraIconWrap: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   slotLabel: { fontSize: 11, fontFamily: 'Poppins-Bold', marginTop: 4 },
   slotSub: { fontSize: 10, fontFamily: 'Poppins-Medium' },

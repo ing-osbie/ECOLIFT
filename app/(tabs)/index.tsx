@@ -147,7 +147,16 @@ const DEFAULT_DISPOSAL_STATIONS: LocationResult[] = [
 
 export default function UserHome() {
   const router = useRouter();
-  const { userName, isDarkMode, selectedWasteType, pickupAddress, bagsCount, selectedPaymentMethod, createPickupOrder } = useApp();
+  const {
+    userName,
+    isDarkMode,
+    selectedWasteType,
+    pickupAddress,
+    setPickupAddress,
+    bagsCount,
+    selectedPaymentMethod,
+    createPickupOrder,
+  } = useApp();
   const { user } = useAuth();
   const C = getColors(isDarkMode);
   const { showAlert, alertProps } = useCustomAlert();
@@ -175,9 +184,6 @@ export default function UserHome() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] =
     useState<LocationResult[]>(DEFAULT_LOCATIONS);
-  const [pickupAddress, setPickupAddress] = useState(
-    "12 Ring Road Central, Osu, Accra",
-  );
   const [userCoords, setUserCoords] = useState({
     latitude: 5.5593,
     longitude: -0.1974,
@@ -490,12 +496,17 @@ export default function UserHome() {
       'Commercial': 'commercial',
       'Bulk / Construction': 'bulk_construction',
     };
+    const vehiclePriceMap: Record<string, number> = {
+      tricycle: 25,
+      truck: 45,
+      heavy: 85,
+    };
     try {
       await createPickupOrder({
         waste_type: (wasteTypeMap[selectedWasteType] || 'household') as any,
         pickup_address: pickupAddress,
         bags_count: bagsCount,
-        price: selectedVehicle?.price || 25,
+        price: vehiclePriceMap[selectedVehicle] || 45,
         payment_method: (selectedPaymentMethod === 'moolre_momo' ? 'momo' : selectedPaymentMethod === 'card' ? 'card' : 'wallet') as any,
       });
     } catch (err) {
