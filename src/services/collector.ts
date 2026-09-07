@@ -275,14 +275,17 @@ export async function getCollectorEarnings(
     }
 
     if (error) {
-      console.warn(
-        "RPC get_collector_earnings warning:",
-        error.message,
-        "— attempting direct query fallback.",
-      );
+      if (__DEV__) {
+        console.info(
+          "RPC get_collector_earnings notice (using direct query fallback):",
+          error.message,
+        );
+      }
     }
   } catch (rpcErr) {
-    console.warn("RPC get_collector_earnings exception, falling back:", rpcErr);
+    if (__DEV__) {
+      console.info("RPC get_collector_earnings fallback notice:", rpcErr);
+    }
   }
 
   // 2. Resilient fallback: compute directly from wallet_transactions & collector_jobs

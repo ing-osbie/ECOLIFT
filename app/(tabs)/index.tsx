@@ -782,7 +782,7 @@ export default function UserHome() {
               source={{
                 uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuBqQYga1SGpJxtvuSMpI27EroZsgkFIu0aME6yLXITm3ghjarJOfA4-PRvf5d15_q6L8l5FFf6fNQcJEVV4LKXEwMHnb0hhx8Wjvl9VWofoZRTpy_TgdLGQA7GFKF26iWNXkNv9TdWdeHEY3FeTV_odkxWxtOVm1tE2EJAOn2o2hFGa7A0EzRdVzq1gq47bYlMOwUu2BzItOr6yrOSf7WK1JPUqbRPL7nkWG-fmzgw2RT7Uj2My9Q2B",
               }}
-              style={StyleSheet.absoluteFillObject}
+              style={StyleSheet.absoluteFill}
               resizeMode="cover"
             />
             <LinearGradient
@@ -791,7 +791,7 @@ export default function UserHome() {
                   ? ["rgba(0, 53, 39, 0.2)", "rgba(0, 53, 39, 0.8)", "#003527"]
                   : ["rgba(0, 53, 39, 0.2)", "rgba(6, 78, 59, 0.85)", "#064E3B"]
               }
-              style={StyleSheet.absoluteFillObject}
+              style={StyleSheet.absoluteFill}
             />
             <View style={styles.heroContentContainer}>
               <Text style={styles.heroTitle}>Schedule a Pickup</Text>
@@ -965,7 +965,7 @@ export default function UserHome() {
               source={{
                 uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuD5QxMKJ7EjPQ332i9tHUM5G126i1nPGLLKKwy6-NKgoeLN1gif0o3wTBX4ntCzvDkV5a3EURAl9wSmcjK5a-sARgvSAvOoMLclP0uIH_otkW73u5F5On8py5bl0z_4H5LHWsVFm-mIiVYdSOecrpSJe2cJb35VEvdr8w8rVEBaGmV_nnSdHsbtPITQVm6qoW0L5F-Hznp9rJHNEEJ6TTVGpiHNvIPta12_AaEevrNyXioWgfdcGjgo",
               }}
-              style={StyleSheet.absoluteFillObject}
+              style={StyleSheet.absoluteFill}
               resizeMode="cover"
             />
             <LinearGradient
@@ -984,7 +984,7 @@ export default function UserHome() {
               }
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={StyleSheet.absoluteFillObject}
+              style={StyleSheet.absoluteFill}
             />
             <View style={styles.ecoTipContent}>
               <View style={styles.ecoTipHeaderRow}>
@@ -2484,7 +2484,7 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Medium",
   },
   searchBackdropOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0, 0, 0, 0.4)",
     zIndex: 90,
   },
@@ -2667,7 +2667,7 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   fullMap: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   mapTopHeader: {
     position: "absolute",

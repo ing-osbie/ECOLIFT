@@ -1,4 +1,5 @@
-import * as FileSystem from 'expo-file-system';
+import { Platform } from 'react-native';
+import { File } from 'expo-file-system';
 
 export interface ClassificationResult {
   name: string;
@@ -10,14 +11,57 @@ export interface ClassificationResult {
   tips: string[];
 }
 
-const GEMINI_API_KEY = 'YOUR_API_KEY'; // TODO: Move to env
+const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+/**
+ * Converts an image URI into a base64 string using modern Expo FileSystem File API,
+ * with fallbacks for data URLs, legacy filesystem, and web.
+ */
+async function getImageBase64(imageUri: string): Promise<string> {
+  // If already a base64 data URL
+  if (imageUri.startsWith('data:')) {
+    const commaIndex = imageUri.indexOf(',');
+    return commaIndex !== -1 ? imageUri.slice(commaIndex + 1) : imageUri;
+  }
+
+  // Web platform fallback using browser FileReader
+  if (Platform.OS === 'web') {
+    const response = await fetch(imageUri);
+    const blob = await response.blob();
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const res = reader.result as string;
+        const commaIdx = res.indexOf(',');
+        resolve(commaIdx !== -1 ? res.slice(commaIdx + 1) : res);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  // Modern Expo FileSystem API (Expo SDK 54+)
+  try {
+    const file = new File(imageUri);
+    return await file.base64();
+  } catch {
+    // Fallback to legacy filesystem module if needed
+    const legacyFs = await import('expo-file-system/legacy');
+    return await legacyFs.readAsStringAsync(imageUri, {
+      encoding: legacyFs.EncodingType.Base64,
+    });
+  }
+}
 
 export async function classifyWasteImage(imageUri: string): Promise<ClassificationResult> {
   try {
-    const base64 = await FileSystem.readAsStringAsync(imageUri, {
-      encoding: 'base64',
-    });
+    // If no API key is provided, return intelligent fallback
+    if (!GEMINI_API_KEY || GEMINI_API_KEY === 'YOUR_API_KEY') {
+      return getFallbackResult();
+    }
+
+    const base64 = await getImageBase64(imageUri);
 
     const prompt = `You are a waste classification AI. Analyze this image and classify the waste material.
 

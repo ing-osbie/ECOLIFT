@@ -784,6 +784,7 @@ $$;
 
 -- Get collector earnings summary
 drop function if exists public.get_collector_earnings(uuid);
+drop function if exists public.get_collector_earnings();
 
 create or replace function public.get_collector_earnings(
   p_collector_id uuid default null
@@ -807,11 +808,11 @@ begin
 
   return query
   select
-    coalesce((select sum(wt.amount) from public.wallet_transactions wt where wt.user_id = v_collector_id and wt.type = 'credit'), 0::numeric) as total_earnings,
-    coalesce((select sum(wt.amount) from public.wallet_transactions wt where wt.user_id = v_collector_id and wt.type = 'credit' and wt.created_at >= date_trunc('week', now())), 0::numeric) as week_earnings,
-    coalesce((select sum(wt.amount) from public.wallet_transactions wt where wt.user_id = v_collector_id and wt.type = 'credit' and wt.created_at >= date_trunc('month', now())), 0::numeric) as month_earnings,
-    (select count(*) from public.collector_jobs cj where cj.collector_id = v_collector_id)::bigint as total_jobs,
-    (select count(*) from public.collector_jobs cj where cj.collector_id = v_collector_id and cj.status = 'completed')::bigint as completed_jobs;
+    coalesce((select sum(wt.amount) from public.wallet_transactions wt where wt.user_id = v_collector_id and wt.type = 'credit'), 0)::numeric as total_earnings,
+    coalesce((select sum(wt.amount) from public.wallet_transactions wt where wt.user_id = v_collector_id and wt.type = 'credit' and wt.created_at >= date_trunc('week', now())), 0)::numeric as week_earnings,
+    coalesce((select sum(wt.amount) from public.wallet_transactions wt where wt.user_id = v_collector_id and wt.type = 'credit' and wt.created_at >= date_trunc('month', now())), 0)::numeric as month_earnings,
+    coalesce((select count(*) from public.collector_jobs cj where cj.collector_id = v_collector_id), 0)::bigint as total_jobs,
+    coalesce((select count(*) from public.collector_jobs cj where cj.collector_id = v_collector_id and cj.status = 'completed'), 0)::bigint as completed_jobs;
 end;
 $$;
 

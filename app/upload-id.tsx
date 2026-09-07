@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
   slotLabel: { fontSize: 11, fontFamily: 'Poppins-Bold', marginTop: 4 },
   slotSub: { fontSize: 10, fontFamily: 'Poppins-Medium' },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',

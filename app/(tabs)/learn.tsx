@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   featuredGradient: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0, 0, 0, 0.45)",
   },
   featuredContent: {
@@ -494,7 +494,7 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   gridCardGradient: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0, 0, 0, 0.4)",
   },
   gridCardContent: {

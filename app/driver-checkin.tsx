@@ -276,16 +276,16 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   cameraImage: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     width: '100%',
     height: '100%',
   },
   cameraOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.35)',
   },
   tapHint: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   scanningOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   verifiedOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(16,185,129,0.25)',
     alignItems: 'center',
     justifyContent: 'center',

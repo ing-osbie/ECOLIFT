@@ -247,7 +247,7 @@ export default function ClassifyScreen() {
           {/* Background Camera / Captured Image */}
           <Image
             source={{ uri: activeImageUri }}
-            style={StyleSheet.absoluteFillObject}
+            style={StyleSheet.absoluteFill}
             resizeMode="cover"
           />
 
@@ -565,7 +565,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#000000",
   },
   vignetteOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0, 0, 0, 0.25)",
   },
   topControlsRow: {
@@ -617,7 +617,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   centerReticleContainer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: "center",
     justifyContent: "center",
   },
