@@ -22,7 +22,7 @@ type SlotState = 'idle' | 'verifying' | 'done';
 
 export default function UploadId() {
   const router = useRouter();
-  const { isDarkMode, setIsCollectorVerified, setIsLoggedIn } = useApp();
+  const { isDarkMode, setIsCollectorVerified, setIsLoggedIn, setUserRole } = useApp();
   const C = getColors(isDarkMode);
 
   const [frontUri, setFrontUri] = useState<string | null>(null);
@@ -70,6 +70,7 @@ export default function UploadId() {
     setTimeout(() => {
       setIsSubmitting(false);
       setSubmissionComplete(true);
+      setUserRole('collector');
       setIsCollectorVerified(true);
       setIsLoggedIn(true);
       setTimeout(() => router.replace('/driver-checkin' as any), 1500);

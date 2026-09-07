@@ -42,7 +42,7 @@ const LOADER_WIDTH = 192; // w-48 = 192px
 export default function SplashScreen() {
   const router = useRouter();
   const { user, loading } = useAuth();
-  const { isOnboarded, isDarkMode } = useApp();
+  const { isOnboarded, isDarkMode, userRole } = useApp();
   const [imageError, setImageError] = useState(false);
 
   const colors = isDarkMode ? THEME.dark : THEME.light;
@@ -94,7 +94,7 @@ export default function SplashScreen() {
     if (loading) return;
     const timeout = setTimeout(() => {
       if (user) {
-        router.replace(user.role === "collector" ? "/(tabs-collector)" : "/(tabs)");
+        router.replace(userRole === "collector" || user.role === "collector" ? "/(tabs-collector)" : "/(tabs)");
       } else if (isOnboarded) {
         router.replace("/login");
       } else {
@@ -102,7 +102,7 @@ export default function SplashScreen() {
       }
     }, 3500);
     return () => clearTimeout(timeout);
-  }, [loading, user, isOnboarded, router]);
+  }, [loading, user, userRole, isOnboarded, router]);
 
   const logoStyle = useAnimatedStyle(() => ({
     opacity: logoOpacity.value,

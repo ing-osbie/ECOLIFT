@@ -84,19 +84,18 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 }
 
 export default function TabLayout() {
-  const { user } = useAuth();
-  const { userRole, isCollectorVerified } = useApp();
+  const { user, loading } = useAuth();
+  const { userRole } = useApp();
   const router = useRouter();
 
   useEffect(() => {
+    if (loading) return;
     if (!user) {
       router.replace('/login');
     } else if (userRole !== 'collector') {
       router.replace('/(tabs)');
-    } else if (!isCollectorVerified) {
-      router.replace('/upload-id');
     }
-  }, [user, userRole, isCollectorVerified]);
+  }, [user, userRole, loading]);
 
   return (
     <Tabs

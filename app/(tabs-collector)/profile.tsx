@@ -32,10 +32,15 @@ const AVATAR_URI = 'https://lh3.googleusercontent.com/aida-public/AB6AXuBra7RcuL
 
 export default function CollectorProfile() {
   const router = useRouter();
-  const { userName, setIsLoggedIn, isDarkMode, toggleDarkMode } = useApp();
+  const { userName, setIsLoggedIn, isDarkMode, toggleDarkMode, switchRole } = useApp();
   const { signOut } = useAuth();
   const { showAlert, alertProps } = useCustomAlert();
   const C = getColors(isDarkMode);
+
+  const handleSwitchToCustomer = async () => {
+    await switchRole('customer');
+    router.replace('/(tabs)');
+  };
 
   const handleLogout = async () => {
     try { await signOut(); } catch {}
@@ -130,6 +135,57 @@ export default function CollectorProfile() {
             </View>
           </View>
         </View>
+
+        {/* Switch to Customer Mode Card */}
+        <TouchableOpacity
+          style={[
+            styles.modeSwitchCard,
+            {
+              backgroundColor: isDarkMode ? "#1A2530" : "#E3F2FD",
+              borderColor: isDarkMode ? "#27384A" : "#BBDEFB",
+            },
+          ]}
+          onPress={handleSwitchToCustomer}
+          activeOpacity={0.88}
+        >
+          <View
+            style={[
+              styles.modeSwitchIconBox,
+              { backgroundColor: isDarkMode ? "#0F1A24" : "#1976D2" },
+            ]}
+          >
+            <User size={22} color="#FFFFFF" />
+          </View>
+          <View style={styles.modeSwitchContent}>
+            <View style={styles.modeSwitchBadgeRow}>
+              <Text
+                style={[
+                  styles.modeSwitchTitle,
+                  { color: isDarkMode ? "#FFFFFF" : "#0D47A1" },
+                ]}
+              >
+                Customer / Household Mode
+              </Text>
+              <View
+                style={[
+                  styles.switchPill,
+                  { backgroundColor: isDarkMode ? "#27384A" : "#1976D2" },
+                ]}
+              >
+                <Text style={styles.switchPillText}>SWITCH</Text>
+              </View>
+            </View>
+            <Text
+              style={[
+                styles.modeSwitchDesc,
+                { color: isDarkMode ? "#90CAF9" : "#1E88E5" },
+              ]}
+            >
+              Book pickups, AI classify waste & earn Eco-Points
+            </Text>
+          </View>
+          <ChevronRight size={20} color={isDarkMode ? "#90CAF9" : "#1976D2"} />
+        </TouchableOpacity>
 
         {/* Account Settings */}
         <Text style={[styles.sectionTitle, { color: C.text }]}>Account Settings</Text>
@@ -247,4 +303,56 @@ const styles = StyleSheet.create({
   menuMeta: { flex: 1 },
   menuTitle: { fontSize: 14, fontFamily: 'Poppins-SemiBold' },
   menuSub: { fontSize: 11, fontFamily: 'Poppins-Medium', marginTop: 1 },
+
+  modeSwitchCard: {
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    gap: 12,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  modeSwitchIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modeSwitchContent: {
+    flex: 1,
+  },
+  modeSwitchBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modeSwitchTitle: {
+    fontSize: 15,
+    fontFamily: 'Poppins-Bold',
+  },
+  switchPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  switchPillText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontFamily: 'Poppins-Bold',
+    letterSpacing: 0.5,
+  },
+  modeSwitchDesc: {
+    fontSize: 11,
+    fontFamily: 'Poppins-Medium',
+    marginTop: 2,
+    lineHeight: 15,
+  },
 });

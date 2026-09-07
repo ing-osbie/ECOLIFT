@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useState,
 } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { useAuth } from "@/src/context/AuthContext";
 import * as collectorService from "@/src/services/collector";
@@ -85,6 +86,7 @@ interface AppContextProps {
   // Common states
   userRole: "customer" | "collector";
   setUserRole: (role: "customer" | "collector") => void;
+  switchRole: (role: "customer" | "collector") => Promise<void>;
   isOnboarded: boolean;
   setIsOnboarded: (val: boolean) => void;
   isLoggedIn: boolean;
@@ -256,9 +258,20 @@ export const AppContextProvider: React.FC<{
   const { user } = useAuth();
 
   // Common states
-  const [userRole, setUserRole] = useState<"customer" | "collector">(
-    "customer",
-  );
+  const [userRole, setUserRoleState] = useState<"customer" | "collector">("customer");
+
+  const setUserRole = useCallback((role: "customer" | "collector") => {
+    setUserRoleState(role);
+    AsyncStorage.setItem("@ecolift_user_role", role).catch(() => {});
+  }, []);
+
+  const switchRole = useCallback(async (role: "customer" | "collector") => {
+    setUserRoleState(role);
+    try {
+      await AsyncStorage.setItem("@ecolift_user_role", role);
+    } catch {}
+  }, []);
+
   const [isOnboarded, setIsOnboarded] = useState<boolean>(false);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [userPhone, setUserPhone] = useState<string>("");
@@ -287,8 +300,28 @@ export const AppContextProvider: React.FC<{
 
   // COLLECTOR STATES
   const [isCollectorOnline, setIsCollectorOnline] = useState<boolean>(true);
-  const [isCollectorVerified, setIsCollectorVerified] =
-    useState<boolean>(false);
+  const [isCollectorVerified, setIsCollectorVerifiedState] =
+    useState<boolean>(true);
+
+  const setIsCollectorVerified = useCallback((val: boolean) => {
+    setIsCollectorVerifiedState(val);
+    AsyncStorage.setItem("@ecolift_collector_verified", val ? "true" : "false").catch(() => {});
+  }, []);
+
+  // Hydrate persisted role & verification on mount
+  useEffect(() => {
+    AsyncStorage.getItem("@ecolift_user_role").then((saved) => {
+      if (saved === "customer" || saved === "collector") {
+        setUserRoleState(saved);
+      }
+    }).catch(() => {});
+
+    AsyncStorage.getItem("@ecolift_collector_verified").then((saved) => {
+      if (saved !== null) {
+        setIsCollectorVerifiedState(saved === "true");
+      }
+    }).catch(() => {});
+  }, []);
   const [frontIdUploaded, setFrontIdUploaded] = useState<boolean>(false);
   const [backIdUploaded, setBackIdUploaded] = useState<boolean>(false);
 
@@ -368,7 +401,15 @@ export const AppContextProvider: React.FC<{
     if (user?.id) {
       setUserName(user.full_name || "Ecolift User");
       setUserPhone(user.phone || "");
-      setUserRole(user.role === "collector" ? "collector" : "customer");
+      AsyncStorage.getItem("@ecolift_user_role").then((savedRole) => {
+        if (savedRole === "customer" || savedRole === "collector") {
+          setUserRoleState(savedRole);
+        } else {
+          setUserRole(user.role === "collector" ? "collector" : "customer");
+        }
+      }).catch(() => {
+        setUserRole(user.role === "collector" ? "collector" : "customer");
+      });
       setIsLoggedIn(true);
       refreshData();
     } else {
@@ -590,6 +631,7 @@ export const AppContextProvider: React.FC<{
       value={{
         userRole,
         setUserRole,
+        switchRole,
         isOnboarded,
         setIsOnboarded,
         isLoggedIn,

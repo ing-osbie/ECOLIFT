@@ -18,6 +18,7 @@ import {
   Moon,
   Sparkles,
   Sun,
+  Truck,
   User,
 } from "lucide-react-native";
 import React from "react";
@@ -43,10 +44,16 @@ export default function Profile() {
     setIsLoggedIn,
     isDarkMode,
     toggleDarkMode,
+    switchRole,
   } = useApp();
   const { signOut } = useAuth();
   const C = getColors(isDarkMode);
   const { showAlert, alertProps } = useCustomAlert();
+
+  const handleSwitchToDriver = async () => {
+    await switchRole("collector");
+    router.replace("/(tabs-collector)");
+  };
 
   const handleLogout = async () => {
     try {
@@ -150,6 +157,57 @@ export default function Profile() {
               <Text style={styles.promoSubtitle}>Invite neighbors to EcoLift.</Text>
             </View>
             <ChevronRight size={22} color="#00714D" />
+          </TouchableOpacity>
+
+          {/* Switch to Driver Mode Card */}
+          <TouchableOpacity
+            style={[
+              styles.driverModeCard,
+              {
+                backgroundColor: isDarkMode ? "#13231B" : "#E8F5E9",
+                borderColor: isDarkMode ? "#1B4D36" : "#A5D6A7",
+              },
+            ]}
+            onPress={handleSwitchToDriver}
+            activeOpacity={0.88}
+          >
+            <View
+              style={[
+                styles.driverModeIconCircle,
+                { backgroundColor: isDarkMode ? "#1B4D36" : "#2E7D32" },
+              ]}
+            >
+              <Truck size={22} color="#FFFFFF" />
+            </View>
+            <View style={styles.driverModeTextBlock}>
+              <View style={styles.driverModeHeaderRow}>
+                <Text
+                  style={[
+                    styles.driverModeTitle,
+                    { color: isDarkMode ? "#A7F3D0" : "#1B5E20" },
+                  ]}
+                >
+                  Driver / Collector Mode
+                </Text>
+                <View
+                  style={[
+                    styles.driverModeBadge,
+                    { backgroundColor: isDarkMode ? "#064E3B" : "#2E7D32" },
+                  ]}
+                >
+                  <Text style={styles.driverModeBadgeText}>SWITCH</Text>
+                </View>
+              </View>
+              <Text
+                style={[
+                  styles.driverModeSubtitle,
+                  { color: isDarkMode ? "#95D3BA" : "#388E3C" },
+                ]}
+              >
+                Accept pickup jobs, view live routes & driver earnings
+              </Text>
+            </View>
+            <ChevronRight size={22} color={isDarkMode ? "#A7F3D0" : "#2E7D32"} />
           </TouchableOpacity>
 
           {/* Account Settings List Card */}
@@ -593,5 +651,54 @@ const styles = StyleSheet.create({
     color: "#BA1A1A",
     fontSize: 14,
     fontFamily: "Poppins-Bold",
+  },
+  driverModeCard: {
+    borderRadius: 20,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1.5,
+    gap: 12,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  driverModeIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  driverModeTextBlock: {
+    flex: 1,
+  },
+  driverModeHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  driverModeTitle: {
+    fontSize: 15,
+    fontFamily: "Poppins-Bold",
+  },
+  driverModeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  driverModeBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontFamily: "Poppins-Bold",
+    letterSpacing: 0.5,
+  },
+  driverModeSubtitle: {
+    fontSize: 11,
+    fontFamily: "Poppins-Medium",
+    marginTop: 2,
+    lineHeight: 15,
   },
 });

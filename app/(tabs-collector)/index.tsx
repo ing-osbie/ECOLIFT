@@ -8,6 +8,7 @@ import { useRouter } from "expo-router";
 import {
   CheckCircle,
   CheckCircle2,
+  ChevronRight,
   Clock,
   CreditCard,
   DollarSign,
@@ -35,7 +36,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function CollectorHome() {
   const router = useRouter();
-  const { isDarkMode } = useApp();
+  const { isDarkMode, userName, isCollectorVerified } = useApp();
   const { showAlert, alertProps } = useCustomAlert();
 
   const C = getColors(isDarkMode);
@@ -107,7 +108,47 @@ export default function CollectorHome() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <CollectorHeader title="Driver Home" subtitle="Welcome back, Osborn" unread={3} />
+        <CollectorHeader
+          title="Driver Home"
+          subtitle={`Welcome back, ${userName || "Collector"}`}
+          unread={3}
+        />
+
+        {/* Verification Reminder Banner */}
+        {!isCollectorVerified && (
+          <TouchableOpacity
+            style={[
+              styles.verificationBanner,
+              {
+                backgroundColor: isDarkMode ? "#271E0B" : "#FFF8E1",
+                borderColor: isDarkMode ? "#5C4308" : "#FFE082",
+              },
+            ]}
+            onPress={() => router.push("/upload-id" as any)}
+            activeOpacity={0.85}
+          >
+            <ShieldCheck size={20} color={isDarkMode ? "#FBBF24" : "#F59E0B"} />
+            <View style={{ flex: 1 }}>
+              <Text
+                style={[
+                  styles.verifTitle,
+                  { color: isDarkMode ? "#FDE68A" : "#B45309" },
+                ]}
+              >
+                Ghana Card Verification Pending
+              </Text>
+              <Text
+                style={[
+                  styles.verifSub,
+                  { color: isDarkMode ? "#FCD34D" : "#92400E" },
+                ]}
+              >
+                Tap to submit your Ghana Card & unlock higher job limits
+              </Text>
+            </View>
+            <ChevronRight size={18} color={isDarkMode ? "#FBBF24" : "#F59E0B"} />
+          </TouchableOpacity>
+        )}
 
         {/* Online Status Toggle */}
         <View style={styles.statusRow}>
@@ -349,4 +390,24 @@ const styles = StyleSheet.create({
   quickCard: { flex: 1, backgroundColor: "#fff", borderWidth: 1, borderColor: "#e2e8f8", borderRadius: 12, padding: 16, alignItems: "center", gap: 4, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   quickTitle: { fontSize: 13, fontFamily: "Poppins-Bold", color: "#151c27", textAlign: "center" },
   quickSub: { fontSize: 11, fontFamily: "Poppins-Medium", color: "#404944", textAlign: "center" },
+
+  // Verification banner
+  verificationBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  verifTitle: {
+    fontSize: 13,
+    fontFamily: "Poppins-Bold",
+  },
+  verifSub: {
+    fontSize: 11,
+    fontFamily: "Poppins-Medium",
+    marginTop: 2,
+  },
 });

@@ -112,7 +112,7 @@ export default function Login() {
       setIsLoggedIn(true);
 
       if (selectedRole === "collector") {
-        router.replace("/upload-id" as any);
+        router.replace("/(tabs-collector)");
       } else {
         router.replace("/(tabs)");
       }
@@ -142,9 +142,9 @@ export default function Login() {
       if (!completed) return;
       setUserPhone("");
       setUserName(user?.full_name || "Google User");
-      setUserRole("customer");
+      setUserRole(selectedRole);
       setIsLoggedIn(true);
-      router.replace("/(tabs)");
+      router.replace(selectedRole === "collector" ? "/(tabs-collector)" : "/(tabs)");
     } catch (err: any) {
       const msg = err?.message || "";
       if (msg.includes("provider is not enabled") || msg.includes("Unsupported provider")) {
