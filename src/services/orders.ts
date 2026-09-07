@@ -43,7 +43,7 @@ export async function createOrder(
 
   const { data, error } = await supabase
     .from("orders")
-    .insert({ ...input, customer_id: userId })
+    .insert({ ...input, customer_id: userId, status: "matching" })
     .select("*")
     .single();
 

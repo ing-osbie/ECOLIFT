@@ -46,6 +46,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { geocodeAddress, getPlaceDetails, reverseGeocode } from "@/src/services/googleMaps";
 import { getNotifications, markAllNotificationsRead } from "@/src/services/notifications";
+import { subscribeToOrderById } from "@/src/services/orders";
+import { Order as DbOrder } from "@/src/types/order";
 import { useAuth } from "@/src/context/AuthContext";
 
 interface LocationResult {
@@ -173,6 +175,7 @@ export default function UserHome() {
   const [viewState, setViewState] = useState<
     "home" | "choose_vehicle" | "confirm_pickup" | "tracking"
   >("home");
+  const [activeOrder, setActiveOrder] = useState<DbOrder | null>(null);
   const [selectedVehicle, setSelectedVehicle] = useState<
     "tricycle" | "truck" | "heavy"
   >("truck");
@@ -201,11 +204,22 @@ export default function UserHome() {
   // Map Picking Active mode: "pickup" | "destination" | null
   const [isMapPickingActive, setIsMapPickingActive] = useState<"pickup" | "destination" | null>(null);
 
-  // Dynamic collector/driver location placed near the user
+  const hasAssignedCollector = Boolean(
+    activeOrder?.collector_id &&
+      (activeOrder.status === "confirmed" || activeOrder.status === "en_route"),
+  );
   const collectorCoords = {
     latitude: userCoords.latitude + 0.004,
     longitude: userCoords.longitude + 0.004,
   };
+
+  React.useEffect(() => {
+    if (!activeOrder?.id) return;
+
+    return subscribeToOrderById(activeOrder.id, (updatedOrder) => {
+      setActiveOrder(updatedOrder);
+    });
+  }, [activeOrder?.id]);
 
   // Dynamic Map markers setup worldwide
   const mapMarkers = [
@@ -217,14 +231,16 @@ export default function UserHome() {
       type: "user" as const,
       draggable: true,
     },
-    {
-      id: "collector",
-      latitude: collectorCoords.latitude,
-      longitude: collectorCoords.longitude,
-      title: "Kwame Mensah (Ecolift Truck #4)",
-      type: "collector" as const,
-      draggable: false,
-    },
+    ...(hasAssignedCollector
+      ? [{
+          id: "collector",
+          latitude: collectorCoords.latitude,
+          longitude: collectorCoords.longitude,
+          title: "Assigned EcoLift collector",
+          type: "collector" as const,
+          draggable: false,
+        }]
+      : []),
     {
       id: "station",
       latitude: destinationCoords.latitude,
@@ -237,16 +253,20 @@ export default function UserHome() {
 
   // Dynamic route polyline connecting collector -> user -> destination
   const routePolyline = [
-    collectorCoords,
-    {
-      latitude: (userCoords.latitude + collectorCoords.latitude) / 2 + 0.001,
-      longitude: (userCoords.longitude + collectorCoords.longitude) / 2 - 0.001,
-    },
-    userCoords,
+    ...(hasAssignedCollector
+      ? [
+          collectorCoords,
+          {
+            latitude: (userCoords.latitude + collectorCoords.latitude) / 2 + 0.001,
+            longitude: (userCoords.longitude + collectorCoords.longitude) / 2 - 0.001,
+          },
+        ]
+      : []),
     {
       latitude: (userCoords.latitude + destinationCoords.latitude) / 2 + 0.002,
       longitude: (userCoords.longitude + destinationCoords.longitude) / 2 + 0.002,
     },
+    userCoords,
     destinationCoords,
   ];
 
@@ -502,23 +522,39 @@ export default function UserHome() {
       heavy: 85,
     };
     try {
-      await createPickupOrder({
+      const createdOrder = await createPickupOrder({
         waste_type: (wasteTypeMap[selectedWasteType] || 'household') as any,
         pickup_address: pickupAddress,
         bags_count: bagsCount,
         price: vehiclePriceMap[selectedVehicle] || 45,
         payment_method: (selectedPaymentMethod === 'moolre_momo' ? 'momo' : selectedPaymentMethod === 'card' ? 'card' : 'wallet') as any,
       });
+
+      if (!createdOrder) {
+        showAlert({
+          type: "error",
+          title: "Pickup Request Not Created",
+          message: "We could not submit your pickup request. Please try again.",
+        });
+        return;
+      }
+
+      setActiveOrder(createdOrder);
     } catch (err) {
       console.warn('Order creation error:', err);
+      showAlert({
+        type: "error",
+        title: "Pickup Request Not Created",
+        message: "We could not submit your pickup request. Please try again.",
+      });
+      return;
     }
 
     setViewState("tracking");
     showAlert({
       type: "success",
-      title: "Pickup Confirmed!",
-      message:
-        "Driver Kwame Mensah is en-route to your location. ETA: 7 minutes.",
+      title: "Pickup Request Submitted",
+      message: "We are finding an available collector for your request.",
     });
   };
 
@@ -1745,7 +1781,32 @@ export default function UserHome() {
                   style={styles.fullMap}
                 />
 
-                <SafeAreaView style={styles.trackingTopHeader}>
+                {!hasAssignedCollector && (
+                  <View
+                    style={[
+                      styles.searchingCollectorPanel,
+                      { backgroundColor: isDarkMode ? "#141716" : "#FFFFFF" },
+                    ]}
+                  >
+                    <ActivityIndicator size="large" color={C.primary} />
+                    <Text style={[styles.searchingCollectorTitle, { color: C.text }]}>
+                      Finding a collector...
+                    </Text>
+                    <Text style={[styles.searchingCollectorSubtitle, { color: C.greyText }]}>
+                      Your pickup request is being shared with available EcoLift collectors.
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.searchingBackButton}
+                      onPress={() => setViewState("home")}
+                    >
+                      <Text style={[styles.searchingBackButtonText, { color: C.primary }]}>Back Home</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                <SafeAreaView
+                  style={[styles.trackingTopHeader, !hasAssignedCollector && styles.hiddenTrackingPanel]}
+                >
                   <View
                     style={[
                       styles.driverFloatingHeader,
@@ -1766,13 +1827,13 @@ export default function UserHome() {
 
                     <View style={styles.driverInfoMeta}>
                       <View style={styles.driverAvatarCircle}>
-                        <Text style={styles.driverAvatarText}>KM</Text>
+                          <Text style={styles.driverAvatarText}>EC</Text>
                       </View>
                       <View>
                         <Text
                           style={[styles.driverNameText, { color: C.text }]}
                         >
-                          Kwame Mensah
+                          EcoLift Collector
                         </Text>
                         <Text
                           style={[
@@ -1780,7 +1841,7 @@ export default function UserHome() {
                             { color: C.greyText },
                           ]}
                         >
-                          Ecolift Truck #4 · 4.9 ⭐
+                          Assigned to your pickup
                         </Text>
                       </View>
                     </View>
@@ -1811,6 +1872,7 @@ export default function UserHome() {
                 <View
                   style={[
                     styles.bottomSheet,
+                    !hasAssignedCollector && styles.hiddenTrackingPanel,
                     { backgroundColor: isDarkMode ? "#141716" : "#FFFFFF" },
                   ]}
                 >
@@ -1854,7 +1916,9 @@ export default function UserHome() {
                       <Text
                         style={[styles.etaStatusHeading, { color: C.text }]}
                       >
-                        Collector En-Route
+                        {activeOrder?.status === "en_route"
+                          ? "Collector En-Route"
+                          : "Collector Assigned"}
                       </Text>
                       <Text
                         style={[styles.etaStatusSub, { color: C.greyText }]}
@@ -2731,6 +2795,47 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 16,
     elevation: 8,
+  },
+  hiddenTrackingPanel: {
+    display: "none",
+  },
+  searchingCollectorPanel: {
+    position: "absolute",
+    left: 20,
+    right: 20,
+    bottom: 32,
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 28,
+    borderRadius: 24,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    elevation: 8,
+    zIndex: 20,
+  },
+  searchingCollectorTitle: {
+    marginTop: 16,
+    fontSize: 22,
+    fontFamily: "Poppins-Bold",
+    textAlign: "center",
+  },
+  searchingCollectorSubtitle: {
+    marginTop: 8,
+    fontSize: 13,
+    lineHeight: 20,
+    fontFamily: "Poppins-Medium",
+    textAlign: "center",
+  },
+  searchingBackButton: {
+    marginTop: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  searchingBackButtonText: {
+    fontSize: 14,
+    fontFamily: "Poppins-Bold",
   },
   sheetHandleTouchArea: {
     paddingVertical: 10,
