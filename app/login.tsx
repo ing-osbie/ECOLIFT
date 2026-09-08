@@ -60,7 +60,6 @@ export default function Login() {
   const [isCountryModalVisible, setIsCountryModalVisible] = useState(false);
   const [countrySearch, setCountrySearch] = useState("");
   const [phoneVal, setPhoneVal] = useState("");
-  const [passwordVal, setPasswordVal] = useState("");
   const [nameVal, setNameVal] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -81,7 +80,7 @@ export default function Login() {
       setErrorMsg("Please enter your full name.");
       return;
     }
-    if (authMode === "signup" && phoneVal.trim().length < 7) {
+    if (phoneVal.trim().length < 7) {
       setErrorMsg("Please enter a valid phone number.");
       return;
     }
@@ -89,20 +88,17 @@ export default function Login() {
       setErrorMsg("Please enter your full name.");
       return;
     }
-    if (passwordVal.length < 8) {
-      setErrorMsg("Password must be at least 8 characters.");
-      return;
-    }
     setErrorMsg("");
     setIsLoading(true);
 
-    const fullPhone = `${selectedCountry.code}${phoneVal.replace(/\D/g, "")}`;
-    const internalEmail = `${phoneVal.replace(/\D/g, "")}@ecolift.app`;
+    const phoneDigits = phoneVal.replace(/\D/g, "");
+    const fullPhone = `${selectedCountry.code}${phoneDigits}`;
+    const internalEmail = `${phoneDigits}@ecolift.app`;
 
     try {
       if (authMode === "signup") {
         try {
-          const hasSession = await signUp(internalEmail, passwordVal, nameVal.trim(), fullPhone, selectedRole);
+          const hasSession = await signUp(internalEmail, fullPhone, nameVal.trim(), fullPhone, selectedRole);
           if (!hasSession) {
             setErrorMsg("Account created. Check your email to verify your account before logging in.");
             return;
@@ -118,7 +114,7 @@ export default function Login() {
         if (!loginEmail) {
           throw new Error("No account was found with that full name.");
         }
-        await signIn(loginEmail, passwordVal);
+        await signIn(loginEmail, fullPhone);
       }
 
       if (authMode === "signup") {
@@ -134,7 +130,7 @@ export default function Login() {
       } else if (msg.includes("Invalid login credentials")) {
         setErrorMsg(authMode === "signup"
           ? "Could not create account. Try logging in if you already have an account."
-          : "Incorrect full name or password. Please try again.");
+          : "Incorrect full name or phone number. Please try again.");
       } else if (msg.includes("Email not confirmed")) {
         setErrorMsg("Please confirm your email before logging in.");
       } else {
@@ -299,21 +295,6 @@ export default function Login() {
               </View>}
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Password</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="At least 8 characters"
-                  placeholderTextColor="#9CA3AF"
-                  value={passwordVal}
-                  onChangeText={setPasswordVal}
-                  autoCapitalize="none"
-                  autoComplete={authMode === "signup" ? "new-password" : "password"}
-                  secureTextEntry
-                />
-              </View>
-
-              {/* Phone input is collected during registration only. */}
-              {authMode === "signup" && <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Phone Number</Text>
                 <View style={styles.phoneRow}>
                   <TouchableOpacity style={styles.countryPicker} onPress={() => setIsCountryModalVisible(true)}>
@@ -331,7 +312,7 @@ export default function Login() {
                     maxLength={12}
                   />
                 </View>
-              </View>}
+              </View>
 
               {/* Submit */}
               <TouchableOpacity
@@ -348,15 +329,6 @@ export default function Login() {
                   </Text>
                 )}
               </TouchableOpacity>
-
-              {authMode === "login" && (
-                <TouchableOpacity
-                  style={styles.forgotButton}
-                  onPress={() => router.push("/reset-password" as any)}
-                >
-                  <Text style={styles.forgotText}>Forgot password?</Text>
-                </TouchableOpacity>
-              )}
 
               <Text style={styles.termsText}>
                 By continuing you agree to the Ecolift{" "}
@@ -631,15 +603,6 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Medium",
     color: "#111827",
     backgroundColor: "#F9FAFB",
-  },
-  forgotButton: {
-    alignSelf: "center",
-    paddingVertical: 12,
-  },
-  forgotText: {
-    fontSize: 13,
-    fontFamily: "Poppins-SemiBold",
-    color: Colors.primary,
   },
   phoneRow: {
     flexDirection: "row",

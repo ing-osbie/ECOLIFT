@@ -1,6 +1,6 @@
 import { supabase } from "@/src/lib/supabase";
 import { Profile } from "@/src/types/auth";
-import { getCurrentUserId, getCurrentSession } from "./auth";
+import { getCurrentUserId } from "./auth";
 
 export async function getProfile(userId?: string): Promise<Profile | null> {
   const id = userId ?? (await getCurrentUserId());
@@ -19,45 +19,20 @@ export async function getProfile(userId?: string): Promise<Profile | null> {
     return null;
   }
 
-  // Profile row missing — create it from the auth session metadata
+  // Profile row missing — create it through the server-side RPC so RLS is not bypassed.
   if (!data) {
-    const session = await getCurrentSession();
-    const meta = session?.user?.user_metadata ?? {};
-    const email = session?.user?.email ?? "";
-    const fullName = meta.full_name ?? "";
-    const phone = meta.phone ?? "";
-    const role = "customer" as const;
-
-    const { data: created, error: insertError } = await supabase
-      .from("profiles")
-      .upsert(
-        {
-          id,
-          email,
-          full_name: fullName,
-          phone: phone || null,
-          role,
-        },
-        { onConflict: "id" }
-      )
-      .select("*")
-      .maybeSingle();
+    const session = await supabase.auth.getSession();
+    const metadata = session.data.session?.user?.user_metadata ?? {};
+    const { data: created, error: insertError } = await supabase.rpc(
+      "ensure_my_profile",
+      {
+        p_full_name: metadata.full_name ?? "",
+        p_phone: metadata.phone ?? null,
+      },
+    );
 
     if (insertError) {
-      console.warn(
-        "Profile RLS insertion fallback active:",
-        insertError.message
-      );
       throw insertError;
-    }
-
-    // Also ensure wallet exists
-    try {
-      await supabase
-        .from("wallets")
-        .upsert({ user_id: id }, { onConflict: "user_id" });
-    } catch {
-      // Ignore wallet upsert error
     }
 
     return created as Profile;

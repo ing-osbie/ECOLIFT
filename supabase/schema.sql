@@ -256,6 +256,56 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
+-- Repair profiles for users created before the auth trigger was installed.
+-- This runs with definer privileges, but always uses auth.uid() as the profile id.
+create or replace function public.ensure_my_profile(
+  p_full_name text default '',
+  p_phone text default null
+)
+returns public.profiles
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_email text;
+  v_profile public.profiles;
+begin
+  if v_user_id is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  select email into v_email from auth.users where id = v_user_id;
+
+  insert into public.profiles (id, email, full_name, phone, role)
+  values (
+    v_user_id,
+    coalesce(v_email, ''),
+    coalesce(nullif(trim(p_full_name), ''), ''),
+    p_phone,
+    'customer'
+  )
+  on conflict (id) do update
+  set full_name = case
+        when trim(excluded.full_name) <> '' then excluded.full_name
+        else public.profiles.full_name
+      end,
+      phone = coalesce(excluded.phone, public.profiles.phone),
+      updated_at = now()
+  returning * into v_profile;
+
+  insert into public.wallets (user_id)
+  values (v_user_id)
+  on conflict (user_id) do nothing;
+
+  return v_profile;
+end;
+$$;
+
+revoke all on function public.ensure_my_profile(text, text) from public;
+grant execute on function public.ensure_my_profile(text, text) to authenticated;
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
