@@ -60,6 +60,15 @@ export async function signIn(email: string, password: string) {
   return data;
 }
 
+export async function getEmailForFullName(fullName: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc("get_login_email_by_name", {
+    p_full_name: fullName.trim(),
+  });
+
+  if (error) throw error;
+  return typeof data === "string" ? data : null;
+}
+
 export async function signOut() {
   const { error } = await supabase.auth.signOut();
 

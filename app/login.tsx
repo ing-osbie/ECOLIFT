@@ -2,6 +2,7 @@ import { GoogleIcon } from "@/components/google-icon";
 import { Colors } from "@/constants/theme";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/src/context/AuthContext";
+import { getEmailForFullName } from "@/src/services/auth";
 import { useRouter } from "expo-router";
 import {
   Check,
@@ -59,7 +60,6 @@ export default function Login() {
   const [isCountryModalVisible, setIsCountryModalVisible] = useState(false);
   const [countrySearch, setCountrySearch] = useState("");
   const [phoneVal, setPhoneVal] = useState("");
-  const [emailVal, setEmailVal] = useState("");
   const [passwordVal, setPasswordVal] = useState("");
   const [nameVal, setNameVal] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
@@ -85,8 +85,8 @@ export default function Login() {
       setErrorMsg("Please enter a valid phone number.");
       return;
     }
-    if (!/^\S+@\S+\.\S+$/.test(emailVal.trim())) {
-      setErrorMsg("Please enter a valid email address.");
+    if (authMode === "login" && nameVal.trim().length < 2) {
+      setErrorMsg("Please enter your full name.");
       return;
     }
     if (passwordVal.length < 8) {
@@ -97,11 +97,12 @@ export default function Login() {
     setIsLoading(true);
 
     const fullPhone = `${selectedCountry.code}${phoneVal.replace(/\D/g, "")}`;
+    const internalEmail = `${phoneVal.replace(/\D/g, "")}@ecolift.app`;
 
     try {
       if (authMode === "signup") {
         try {
-          const hasSession = await signUp(emailVal.trim(), passwordVal, nameVal.trim(), fullPhone, selectedRole);
+          const hasSession = await signUp(internalEmail, passwordVal, nameVal.trim(), fullPhone, selectedRole);
           if (!hasSession) {
             setErrorMsg("Account created. Check your email to verify your account before logging in.");
             return;
@@ -109,11 +110,15 @@ export default function Login() {
         } catch (signUpErr: any) {
           const msg: string = signUpErr?.message || "";
           if (msg.includes("already registered") || msg.includes("already exists") || msg.includes("User already registered")) {
-            throw new Error("An account with this email already exists. Log in instead.");
+            throw new Error("An account with these details already exists. Log in instead.");
           } else { throw signUpErr; }
         }
       } else {
-        await signIn(emailVal.trim(), passwordVal);
+        const loginEmail = await getEmailForFullName(nameVal.trim());
+        if (!loginEmail) {
+          throw new Error("No account was found with that full name.");
+        }
+        await signIn(loginEmail, passwordVal);
       }
 
       if (authMode === "signup") {
@@ -129,7 +134,7 @@ export default function Login() {
       } else if (msg.includes("Invalid login credentials")) {
         setErrorMsg(authMode === "signup"
           ? "Could not create account. Try logging in if you already have an account."
-          : "Incorrect email or password. Try again or reset your password.");
+          : "Incorrect full name or password. Please try again.");
       } else if (msg.includes("Email not confirmed")) {
         setErrorMsg("Please confirm your email before logging in.");
       } else {
@@ -281,19 +286,17 @@ export default function Login() {
                 </View>
               )}
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Email Address</Text>
+              {authMode === "login" && <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Full Name</Text>
                 <TextInput
                   style={styles.textInput}
-                  placeholder="you@example.com"
+                  placeholder="e.g. Kwame Mensah"
                   placeholderTextColor="#9CA3AF"
-                  value={emailVal}
-                  onChangeText={setEmailVal}
-                  autoCapitalize="none"
-                  autoComplete="email"
-                  keyboardType="email-address"
+                  value={authMode === "login" ? nameVal : undefined}
+                  onChangeText={authMode === "login" ? setNameVal : undefined}
+                  autoCapitalize="words"
                 />
-              </View>
+              </View>}
 
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Password</Text>

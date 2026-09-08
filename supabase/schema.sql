@@ -373,6 +373,24 @@ as $$
   );
 $$;
 
+-- Resolve the private auth identifier for the name-only login form.
+create or replace function public.get_login_email_by_name(p_full_name text)
+returns text
+language sql
+security definer
+set search_path = public
+as $$
+  select email
+  from public.profiles
+  where lower(trim(full_name)) = lower(trim(p_full_name))
+    and trim(p_full_name) <> ''
+  order by created_at asc
+  limit 1;
+$$;
+
+revoke all on function public.get_login_email_by_name(text) from public;
+grant execute on function public.get_login_email_by_name(text) to anon, authenticated;
+
 -- Secure Wallet Top-Up
 create or replace function public.top_up_wallet(
   p_amount numeric,
