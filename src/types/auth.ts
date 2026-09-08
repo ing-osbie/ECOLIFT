@@ -1,4 +1,8 @@
-export type UserRole = "customer" | "collector" | "admin";
+export type UserRole =
+  | "customer"
+  | "collector"
+  | "recycling_organisation"
+  | "admin";
 
 export interface Profile {
   id: string;
@@ -31,8 +35,10 @@ export interface AuthContextType {
     fullName: string,
     phone: string,
     role: UserRole,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   signInWithGoogle: () => Promise<boolean>;
+  requestPasswordReset: (email: string) => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }

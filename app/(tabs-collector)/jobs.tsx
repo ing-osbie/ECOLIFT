@@ -1,11 +1,12 @@
 import { CollectorHeader } from '@/components/collector-header';
+import { CustomAlert, useCustomAlert } from '@/components/custom-alert';
 import { GlassCard } from '@/components/glass-card';
 import { PickupStatusStepper } from '@/components/pickup-status-stepper';
 import { Colors, getColors } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
 import { useRouter } from 'expo-router';
-import { MapPin, Navigation, PackageCheck, Truck } from 'lucide-react-native';
-import React, { useState } from 'react';
+import { MapPin, Navigation, PackageCheck, Phone, MessageSquare, Truck } from 'lucide-react-native';
+import React, { useMemo, useState } from 'react';
 import {
   Image,
   ScrollView,
@@ -18,11 +19,25 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 type Filter = 'Active' | 'Scheduled' | 'Completed';
 
-const PICKUPS = [
+interface UiPickup {
+  id: string;
+  filter: Filter;
+  name: string;
+  phone?: string;
+  address: string;
+  type: string;
+  weight: string;
+  slot: string;
+  mapUri: string;
+  isLive?: boolean;
+}
+
+const STATIC_PICKUPS: UiPickup[] = [
   {
     id: '1',
-    filter: 'Active' as Filter,
+    filter: 'Active',
     name: 'Sarah Jenkins',
+    phone: '+233 24 123 4567',
     address: '123 Eco Way, Apt 4B',
     type: 'Plastic',
     weight: '15 kg',
@@ -31,8 +46,9 @@ const PICKUPS = [
   },
   {
     id: '2',
-    filter: 'Active' as Filter,
+    filter: 'Active',
     name: 'Marcus Reed',
+    phone: '+233 20 987 6543',
     address: '456 Green Blvd, Suite 2',
     type: 'Mixed Metals',
     weight: '42 kg',
@@ -41,8 +57,9 @@ const PICKUPS = [
   },
   {
     id: '3',
-    filter: 'Scheduled' as Filter,
+    filter: 'Scheduled',
     name: 'Abena Serwaa',
+    phone: '+233 55 456 7890',
     address: 'Osu RE, Ring Road',
     type: 'Cardboard',
     weight: '28 kg',
@@ -51,8 +68,9 @@ const PICKUPS = [
   },
   {
     id: '4',
-    filter: 'Completed' as Filter,
+    filter: 'Completed',
     name: 'Kwame Asante',
+    phone: '+233 27 345 6789',
     address: 'East Legon, Accra',
     type: 'Mixed',
     weight: '35 kg',
@@ -65,11 +83,77 @@ const FILTERS: Filter[] = ['Active', 'Scheduled', 'Completed'];
 
 export default function PickupDashboard() {
   const router = useRouter();
-  const { isDarkMode } = useApp();
+  const { isDarkMode, collectorJobs } = useApp();
   const C = getColors(isDarkMode);
+  const { showAlert, alertProps } = useCustomAlert();
   const [filter, setFilter] = useState<Filter>('Active');
 
-  const visible = PICKUPS.filter(p => p.filter === filter);
+  const allPickups = useMemo(() => {
+    const liveItems: UiPickup[] = (collectorJobs || []).map((job) => {
+      let f: Filter = 'Active';
+      if (job.status === 'Completed') f = 'Completed';
+      else if (job.status === 'Cancelled' || job.status === 'Missed') f = 'Scheduled';
+      return {
+        id: job.id,
+        filter: f,
+        name: job.customerName || 'Customer',
+        address: job.address || 'Pickup Location',
+        type: job.wasteType || 'General Waste',
+        weight: '25 kg',
+        slot: job.date || 'Today (Flexible)',
+        mapUri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA6SXyMnw7zoABp42rKDwnhBlpoRIw495UZZP3P45rBdM6gyKFQb-GiMfCYPLpeQ6rRrWtaNRZftWPgZY-5bVSAJ7EjaI7GOTm3k9xpqA_ovuwS8sqA6izHSuZkKozgkpgoQO-WVIWVAYCYbCmnCTD7szpASCWRZtPSnGQrJmYRheXEZHhOXwiq4_ceW2PZcVVsxlzsEfiEGvAxSNWoqsoRZy4vCTyy8rmmh7vC0TxaCloZn8nNUCzq',
+        isLive: true,
+      };
+    });
+
+    return [...liveItems, ...STATIC_PICKUPS];
+  }, [collectorJobs]);
+
+  const activeCount = allPickups.filter((p) => p.filter === 'Active').length;
+  const scheduledCount = allPickups.filter((p) => p.filter === 'Scheduled').length;
+  const visible = allPickups.filter((p) => p.filter === filter);
+
+  const handleStartPickup = (pickup: UiPickup) => {
+    showAlert({
+      type: 'info',
+      title: `Pickup: ${pickup.name}`,
+      message: `Address: ${pickup.address}\nWaste: ${pickup.type} (${pickup.weight})\n\nSelect an action:`,
+      actions: [
+        {
+          label: 'Navigate to Map',
+          variant: 'primary',
+          onPress: () => router.push('/(tabs-collector)' as any),
+        },
+        {
+          label: 'Call Customer',
+          onPress: () => router.push({ pathname: '/call', params: { name: pickup.name } } as any),
+        },
+        {
+          label: 'Chat Customer',
+          onPress: () => router.push({ pathname: '/chat', params: { name: pickup.name } } as any),
+        },
+      ],
+    });
+  };
+
+  const handleViewDetails = (pickup: UiPickup) => {
+    showAlert({
+      type: 'info',
+      title: 'Scheduled Pickup Details',
+      message: `Customer: ${pickup.name}\nAddress: ${pickup.address}\nTime Slot: ${pickup.slot}\nWaste Category: ${pickup.type}`,
+      actions: [
+        {
+          label: 'Contact Customer',
+          onPress: () => router.push({ pathname: '/chat', params: { name: pickup.name } } as any),
+        },
+        {
+          label: 'Close',
+          variant: 'secondary',
+          onPress: () => {},
+        },
+      ],
+    });
+  };
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: C.screenBg }]}>
@@ -82,7 +166,9 @@ export default function PickupDashboard() {
         <View style={[styles.routeCard, { backgroundColor: C.cardSecondary, borderColor: C.border }]}>
           <Text style={[styles.routeTitle, { color: C.text }]}>Today's Route</Text>
           <View style={styles.routeMeta}>
-            <Text style={[styles.routeMetaText, { color: C.greyText }]}>🕐 3 Active · 12 Scheduled</Text>
+            <Text style={[styles.routeMetaText, { color: C.greyText }]}>
+              🕐 {activeCount} Active · {scheduledCount} Scheduled
+            </Text>
           </View>
         </View>
 
@@ -167,18 +253,30 @@ export default function PickupDashboard() {
                 {/* Action buttons */}
                 {filter === 'Active' ? (
                   <View style={styles.actionRow}>
-                    <TouchableOpacity style={[styles.mapBtn, { backgroundColor: C.cardSecondary }]}>
+                    <TouchableOpacity
+                      style={[styles.mapBtn, { backgroundColor: C.cardSecondary }]}
+                      onPress={() => router.push('/(tabs-collector)' as any)}
+                      activeOpacity={0.8}
+                    >
                       <Navigation size={16} color={C.text} />
                       <Text style={[styles.mapBtnText, { color: C.text }]}>Map</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={[styles.startBtn, { backgroundColor: C.primary }]}>
+                    <TouchableOpacity
+                      style={[styles.startBtn, { backgroundColor: C.primary }]}
+                      onPress={() => handleStartPickup(p)}
+                      activeOpacity={0.8}
+                    >
                       <Text style={[styles.startBtnText, { color: isDarkMode ? '#0B3D2E' : '#FFFFFF' }]}>
                         Start Pickup →
                       </Text>
                     </TouchableOpacity>
                   </View>
                 ) : filter === 'Scheduled' ? (
-                  <TouchableOpacity style={[styles.detailsBtn, { backgroundColor: C.cardSecondary }]}>
+                  <TouchableOpacity
+                    style={[styles.detailsBtn, { backgroundColor: C.cardSecondary }]}
+                    onPress={() => handleViewDetails(p)}
+                    activeOpacity={0.8}
+                  >
                     <Text style={[styles.detailsBtnText, { color: C.text }]}>View Details</Text>
                   </TouchableOpacity>
                 ) : (
@@ -192,6 +290,7 @@ export default function PickupDashboard() {
         </View>
 
       </ScrollView>
+      <CustomAlert {...alertProps} />
     </SafeAreaView>
   );
 }

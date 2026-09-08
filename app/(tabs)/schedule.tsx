@@ -3,6 +3,7 @@ import { GlassCard } from "@/components/glass-card";
 import { GradientBackground } from "@/components/gradient-background";
 import { Colors, getColors } from "@/constants/theme";
 import { useApp } from "@/context/AppContext";
+import { useAuth } from "@/src/context/AuthContext";
 import { useRouter } from "expo-router";
 import {
   ArrowRight,
@@ -63,7 +64,8 @@ const START_DAY_OFFSET = 2; // Starts on Tuesday
 
 export default function Schedule() {
   const router = useRouter();
-  const { isDarkMode } = useApp();
+  const { isDarkMode, saveSchedule, pickupAddress } = useApp();
+  const { user } = useAuth();
   const C = getColors(isDarkMode);
   const { showAlert, alertProps } = useCustomAlert();
 
@@ -109,6 +111,16 @@ export default function Schedule() {
         ? "Morning (8:00 AM - 12:00 PM)"
         : "Afternoon (12:00 PM - 4:00 PM)";
 
+    const wasteSummary = summaryItems.map((i) => i.title).join(", ");
+    saveSchedule({
+      id: "sched-" + Date.now(),
+      frequency: "weekly",
+      days: [`Day ${selectedDay}`],
+      address: pickupAddress || "Accra, Ghana",
+      wasteType: wasteSummary || "Mixed Recyclables",
+      enabled: true,
+    });
+
     showAlert({
       type: "success",
       title: "Pickup Confirmed!",
@@ -147,7 +159,7 @@ export default function Schedule() {
               activeOpacity={0.8}
             >
               <Image
-                source={{ uri: 'https://lh3.googleusercontent.com/aida/AP1WRLvvebFOZ6ynMsVwLT_RhMB47PIf8hxioUnplUngiLRck_uwziGuo8q9YO5aj1foVEUmhejlyafL2z2OHqEPi7FC8azbJoc-ziJbt6qsF5SMnw3GGseHcRNMOLhOvVO7v71vEGCzSy99We7_7rFyQI5Xzz2j4GcrsBMMWBjTRHPbwqUwGF-tolAZtlI0fp2FGa_-ATEKQMsHpKcZA_Q1cKK8GQq6hUUor6q0TpvsuD-ZBS35WmtkQvEqKtrn1A2MHmfBS2lh9XHmQQ' }}
+                source={{ uri: user?.avatar_url || 'https://lh3.googleusercontent.com/aida/AP1WRLvvebFOZ6ynMsVwLT_RhMB47PIf8hxioUnplUngiLRck_uwziGuo8q9YO5aj1foVEUmhejlyafL2z2OHqEPi7FC8azbJoc-ziJbt6qsF5SMnw3GGseHcRNMOLhOvVO7v71vEGCzSy99We7_7rFyQI5Xzz2j4GcrsBMMWBjTRHPbwqUwGF-tolAZtlI0fp2FGa_-ATEKQMsHpKcZA_Q1cKK8GQq6hUUor6q0TpvsuD-ZBS35WmtkQvEqKtrn1A2MHmfBS2lh9XHmQQ' }}
                 style={styles.avatarImage}
               />
             </TouchableOpacity>

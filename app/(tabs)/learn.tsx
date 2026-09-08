@@ -3,6 +3,7 @@ import { GlassCard } from "@/components/glass-card";
 import { GradientBackground } from "@/components/gradient-background";
 import { Colors, getColors } from "@/constants/theme";
 import { useApp } from "@/context/AppContext";
+import { useAuth } from "@/src/context/AuthContext";
 import { useRouter } from "expo-router";
 import {
   ArrowRight,
@@ -105,7 +106,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export default function LearnScreen() {
   const router = useRouter();
-  const { isDarkMode } = useApp();
+  const { isDarkMode, addEcoPoints } = useApp();
+  const { user } = useAuth();
   const C = getColors(isDarkMode);
   const { showAlert, alertProps } = useCustomAlert();
 
@@ -146,7 +148,7 @@ export default function LearnScreen() {
             >
               <Text style={[styles.headerProfileText, { color: C.greyText }]}>Profile</Text>
               <Image
-                source={{ uri: 'https://lh3.googleusercontent.com/aida/AP1WRLvvebFOZ6ynMsVwLT_RhMB47PIf8hxioUnplUngiLRck_uwziGuo8q9YO5aj1foVEUmhejlyafL2z2OHqEPi7FC8azbJoc-ziJbt6qsF5SMnw3GGseHcRNMOLhOvVO7v71vEGCzSy99We7_7rFyQI5Xzz2j4GcrsBMMWBjTRHPbwqUwGF-tolAZtlI0fp2FGa_-ATEKQMsHpKcZA_Q1cKK8GQq6hUUor6q0TpvsuD-ZBS35WmtkQvEqKtrn1A2MHmfBS2lh9XHmQQ' }}
+                source={{ uri: user?.avatar_url || 'https://lh3.googleusercontent.com/aida/AP1WRLvvebFOZ6ynMsVwLT_RhMB47PIf8hxioUnplUngiLRck_uwziGuo8q9YO5aj1foVEUmhejlyafL2z2OHqEPi7FC8azbJoc-ziJbt6qsF5SMnw3GGseHcRNMOLhOvVO7v71vEGCzSy99We7_7rFyQI5Xzz2j4GcrsBMMWBjTRHPbwqUwGF-tolAZtlI0fp2FGa_-ATEKQMsHpKcZA_Q1cKK8GQq6hUUor6q0TpvsuD-ZBS35WmtkQvEqKtrn1A2MHmfBS2lh9XHmQQ' }}
                 style={styles.avatarImage}
               />
             </TouchableOpacity>
@@ -314,6 +316,7 @@ export default function LearnScreen() {
                     const isQuiz = selectedGuide?.isQuiz;
                     setSelectedGuide(null);
                     if (isQuiz) {
+                      addEcoPoints(50);
                       showAlert({
                         type: "success",
                         title: "Quiz Completed!",

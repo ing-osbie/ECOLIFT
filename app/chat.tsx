@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { GradientBackground } from '@/components/gradient-background';
 import { GlassCard } from '@/components/glass-card';
 import { getColors } from '@/constants/theme';
@@ -18,11 +18,12 @@ interface Message {
 
 export default function Chat() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ name?: string }>();
   const { isDarkMode, selectedCollector } = useApp();
   const C = getColors(isDarkMode);
 
   const flatListRef = useRef<FlatList>(null);
-  const collectorName = selectedCollector?.name || 'Kwame Mensah';
+  const collectorName = params.name || selectedCollector?.name || 'Kwame Mensah';
 
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([

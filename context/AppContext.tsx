@@ -96,7 +96,8 @@ interface AppContextProps {
   userName: string;
   setUserName: (name: string) => void;
   walletBalance: number;
-  topUpWallet: (amount: number) => void;
+  topUpWallet: (amount: number, description?: string) => Promise<void>;
+  debitWallet: (amount: number, description?: string) => Promise<void>;
 
   // Customer Booking flow
   currentBookingStep: BookingStep;
@@ -260,19 +261,20 @@ export const AppContextProvider: React.FC<{
   // Common states
   const [userRole, setUserRoleState] = useState<"customer" | "collector">("customer");
 
-  const setUserRole = useCallback((role: "customer" | "collector") => {
-    setUserRoleState(role);
-    AsyncStorage.setItem("@ecolift_user_role", role).catch(() => {});
+  const setUserRole = useCallback((_role: "customer" | "collector") => {
+    // Role changes must come from the authenticated Supabase profile.
   }, []);
 
-  const switchRole = useCallback(async (role: "customer" | "collector") => {
-    setUserRoleState(role);
-    try {
-      await AsyncStorage.setItem("@ecolift_user_role", role);
-    } catch {}
+  const switchRole = useCallback(async (_role: "customer" | "collector") => {
+    setUserRoleState(user?.role === "collector" ? "collector" : "customer");
+  }, [user?.role]);
+
+  const [isOnboarded, setIsOnboardedState] = useState<boolean>(false);
+  const setIsOnboarded = useCallback((val: boolean) => {
+    setIsOnboardedState(val);
+    AsyncStorage.setItem("@ecolift_onboarded", val ? "true" : "false").catch(() => {});
   }, []);
 
-  const [isOnboarded, setIsOnboarded] = useState<boolean>(false);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [userPhone, setUserPhone] = useState<string>("");
   const [userName, setUserName] = useState<string>("Akwasi");
@@ -308,7 +310,31 @@ export const AppContextProvider: React.FC<{
     AsyncStorage.setItem("@ecolift_collector_verified", val ? "true" : "false").catch(() => {});
   }, []);
 
-  // Hydrate persisted role & verification on mount
+  // Dark Mode
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+  const toggleDarkMode = useCallback(() => {
+    setIsDarkMode((prev) => {
+      const next = !prev;
+      AsyncStorage.setItem("@ecolift_dark_mode", next ? "true" : "false").catch(() => {});
+      return next;
+    });
+  }, []);
+
+  // EcoPoints
+  const [ecoPoints, setEcoPointsState] = useState<number>(2450);
+  const setEcoPoints = useCallback((points: number) => {
+    setEcoPointsState(points);
+    AsyncStorage.setItem("@ecolift_eco_points", points.toString()).catch(() => {});
+  }, []);
+  const addEcoPoints = useCallback((points: number) => {
+    setEcoPointsState((prev) => {
+      const next = prev + points;
+      AsyncStorage.setItem("@ecolift_eco_points", next.toString()).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  // Hydrate persisted state on mount
   useEffect(() => {
     AsyncStorage.getItem("@ecolift_user_role").then((saved) => {
       if (saved === "customer" || saved === "collector") {
@@ -319,6 +345,25 @@ export const AppContextProvider: React.FC<{
     AsyncStorage.getItem("@ecolift_collector_verified").then((saved) => {
       if (saved !== null) {
         setIsCollectorVerifiedState(saved === "true");
+      }
+    }).catch(() => {});
+
+    AsyncStorage.getItem("@ecolift_onboarded").then((saved) => {
+      if (saved !== null) {
+        setIsOnboardedState(saved === "true");
+      }
+    }).catch(() => {});
+
+    AsyncStorage.getItem("@ecolift_dark_mode").then((saved) => {
+      if (saved !== null) {
+        setIsDarkMode(saved === "true");
+      }
+    }).catch(() => {});
+
+    AsyncStorage.getItem("@ecolift_eco_points").then((saved) => {
+      if (saved !== null) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed)) setEcoPointsState(parsed);
       }
     }).catch(() => {});
   }, []);
@@ -334,14 +379,6 @@ export const AppContextProvider: React.FC<{
   const [activeJobStep, setActiveJobStep] = useState<CollectorJobStep>("idle");
   const [navigationProgress, setNavigationProgress] = useState<number>(0);
   const [isNavSimulating, setIsNavSimulating] = useState<boolean>(false);
-
-  // Dark Mode
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
-  const toggleDarkMode = () => setIsDarkMode((prev) => !prev);
-
-  // EcoPoints
-  const [ecoPoints, setEcoPoints] = useState<number>(0);
-  const addEcoPoints = (points: number) => setEcoPoints((prev) => prev + points);
 
   // Lists (start empty; populated from backend when authenticated)
   const [orders, setOrders] = useState<Order[]>([]);
@@ -401,15 +438,7 @@ export const AppContextProvider: React.FC<{
     if (user?.id) {
       setUserName(user.full_name || "Ecolift User");
       setUserPhone(user.phone || "");
-      AsyncStorage.getItem("@ecolift_user_role").then((savedRole) => {
-        if (savedRole === "customer" || savedRole === "collector") {
-          setUserRoleState(savedRole);
-        } else {
-          setUserRole(user.role === "collector" ? "collector" : "customer");
-        }
-      }).catch(() => {
-        setUserRole(user.role === "collector" ? "collector" : "customer");
-      });
+      setUserRoleState(user.role === "collector" ? "collector" : "customer");
       setIsLoggedIn(true);
       refreshData();
     } else {
@@ -423,7 +452,7 @@ export const AppContextProvider: React.FC<{
     }
   }, [user, refreshData]);
 
-  const topUpWallet = async (amount: number) => {
+  const topUpWallet = async (amount: number, description = "Wallet top-up") => {
     setWalletBalance((prev) => prev + amount);
     addNotification({
       title: "Wallet Topped Up",
@@ -433,9 +462,25 @@ export const AppContextProvider: React.FC<{
     // Persist to backend if authenticated
     if (user?.id) {
       try {
-        await walletService.topUpWallet(amount);
+        await walletService.topUpWallet(amount, description);
       } catch (err) {
         console.warn("topUpWallet backend error:", err);
+      }
+    }
+  };
+
+  const debitWallet = async (amount: number, description = "Wallet debit") => {
+    setWalletBalance((prev) => Math.max(0, prev - amount));
+    addNotification({
+      title: "Wallet Debited",
+      body: `Deducted GHS ${amount.toFixed(2)}: ${description}`,
+      type: "payment",
+    });
+    if (user?.id) {
+      try {
+        await walletService.debitWallet(amount, description);
+      } catch (err) {
+        console.warn("debitWallet backend error:", err);
       }
     }
   };
@@ -642,6 +687,7 @@ export const AppContextProvider: React.FC<{
         setUserName,
         walletBalance,
         topUpWallet,
+        debitWallet,
 
         currentBookingStep,
         setCurrentBookingStep,

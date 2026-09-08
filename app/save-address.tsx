@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Platform, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useRouter } from 'expo-router';
 import { GradientBackground } from '@/components/gradient-background';
@@ -28,6 +29,19 @@ export default function SaveAddress() {
     { id: '2', label: 'Office HQ', address: '12 Ring Road Central, Accra', type: 'work' },
     { id: '3', label: 'Mom\'s Place', address: 'Block 4, Airport Residential Area, Accra', type: 'other' },
   ]);
+
+  useEffect(() => {
+    AsyncStorage.getItem("@ecolift_saved_addresses").then((saved) => {
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setAddresses(parsed);
+          }
+        } catch {}
+      }
+    }).catch(() => {});
+  }, []);
 
   const [newLabel, setNewLabel] = useState('');
   const [newAddress, setNewAddress] = useState('');
@@ -59,7 +73,9 @@ export default function SaveAddress() {
       type: newType,
     };
 
-    setAddresses(prev => [...prev, newItem]);
+    const updated = [...addresses, newItem];
+    setAddresses(updated);
+    AsyncStorage.setItem("@ecolift_saved_addresses", JSON.stringify(updated)).catch(() => {});
     setNewLabel('');
     setAddressText(newAddress);
     setNewAddress('');
@@ -88,7 +104,9 @@ export default function SaveAddress() {
   };
 
   const handleDeleteAddress = (id: string, label: string) => {
-    setAddresses(prev => prev.filter(item => item.id !== id));
+    const updated = addresses.filter(item => item.id !== id);
+    setAddresses(updated);
+    AsyncStorage.setItem("@ecolift_saved_addresses", JSON.stringify(updated)).catch(() => {});
     showAlert({
       type: 'info',
       title: 'Deleted',

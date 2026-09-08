@@ -51,11 +51,11 @@ const REWARDS = [
 
 export default function RewardsScreen() {
   const router = useRouter();
-  const { isDarkMode } = useApp();
+  const { isDarkMode, ecoPoints, setEcoPoints, topUpWallet } = useApp();
   const C = getColors(isDarkMode);
   const { showAlert, alertProps } = useCustomAlert();
 
-  const [points, setPoints] = useState(2450);
+  const points = ecoPoints;
 
   const currentTier =
     TIERS.find((t) => points >= t.min && points <= t.max) ?? TIERS[0];
@@ -64,7 +64,7 @@ export default function RewardsScreen() {
     ? (points - currentTier.min) / (nextTier.min - currentTier.min)
     : 1;
 
-  const handleRedeem = (reward: (typeof REWARDS)[0]) => {
+  const handleRedeem = async (reward: (typeof REWARDS)[0]) => {
     if (points < reward.cost) {
       showAlert({
         type: "error",
@@ -73,7 +73,14 @@ export default function RewardsScreen() {
       });
       return;
     }
-    setPoints((p) => p - reward.cost);
+    setEcoPoints(points - reward.cost);
+
+    if (reward.id === "r1") {
+      await topUpWallet(5, "EcoPoints Reward: GHS 5 Credit");
+    } else if (reward.id === "r2") {
+      await topUpWallet(10, "EcoPoints Reward: GHS 10 Credit");
+    }
+
     showAlert({
       type: "success",
       title: "Reward Redeemed!",

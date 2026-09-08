@@ -9,7 +9,6 @@ import { Colors, getColors } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
 import { CustomAlert, useCustomAlert } from '@/components/custom-alert';
 import { Wallet, ArrowLeft, CheckCircle2, Smartphone, DollarSign, CreditCard, ChevronRight } from 'lucide-react-native';
-import * as walletService from '@/src/services/wallet';
 
 const PRESET_AMOUNTS = [10, 20, 50, 100, 200];
 
@@ -36,8 +35,7 @@ export default function TopUp() {
 
     setIsLoading(true);
     try {
-      await walletService.topUpWallet(val, `Top-up via ${provider.toUpperCase()} MoMo`);
-      topUpWallet(val); // sync local state
+      await topUpWallet(val, `Top-up via ${provider.toUpperCase()} MoMo`);
       showAlert({
         type: 'success',
         title: 'Top Up Success',
@@ -45,14 +43,10 @@ export default function TopUp() {
         actions: [{ label: 'Back to Profile', onPress: () => router.back() }],
       });
     } catch {
-      // Fallback to local-only if not authenticated (demo mode)
-
-      topUpWallet(val);
       showAlert({
-        type: 'success',
-        title: 'Top Up Success',
-        message: `GHS ${val.toFixed(2)} was successfully added to your Ecolift Wallet.`,
-        actions: [{ label: 'Back to Profile', onPress: () => router.back() }],
+        type: 'error',
+        title: 'Top Up Failed',
+        message: 'Could not complete wallet top-up. Please try again.',
       });
     } finally {
       setIsLoading(false);

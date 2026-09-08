@@ -8,7 +8,8 @@
     "scheme": "ecoliftapp",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ing.osbie.ecolift-app"
     },
     "android": {
       "adaptiveIcon": {

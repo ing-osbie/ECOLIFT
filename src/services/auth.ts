@@ -1,17 +1,22 @@
 import { supabase } from "@/src/lib/supabase";
 import { UserRole } from "@/src/types/auth";
+import { makeRedirectUri } from "expo-auth-session";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { Platform } from "react-native";
 
-const REDIRECT_URL = Linking.createURL("/auth/callback");
+const REDIRECT_URL = makeRedirectUri({
+  scheme: "ecoliftapp",
+  path: "auth/callback",
+});
+console.log("GOOGLE REDIRECT URL:", REDIRECT_URL);
 
 export async function signUp(
   email: string,
   password: string,
   fullName: string,
   phone: string,
-  role: UserRole,
+  _role: UserRole,
 ) {
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -20,7 +25,8 @@ export async function signUp(
       data: {
         full_name: fullName,
         phone,
-        role,
+        // Elevated roles are provisioned server-side after registration.
+        role: "customer",
       },
     },
   });
@@ -28,6 +34,19 @@ export async function signUp(
   if (error) throw error;
 
   return data;
+}
+
+export async function requestPasswordReset(email: string) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: Linking.createURL("/reset-password"),
+  });
+
+  if (error) throw error;
+}
+
+export async function updatePassword(password: string) {
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw error;
 }
 
 export async function signIn(email: string, password: string) {

@@ -1,6 +1,8 @@
 import { CollectorHeader } from '@/components/collector-header';
+import { CustomAlert, useCustomAlert } from '@/components/custom-alert';
 import { getColors } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
+import { useRouter } from 'expo-router';
 import { ShoppingCart, Star, Wallet } from 'lucide-react-native';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -23,11 +25,53 @@ const TRANSACTIONS = [
 ];
 
 export default function Earnings() {
-  const { collectorEarningsToday, collectorEarningsWeek, isDarkMode } = useApp();
+  const router = useRouter();
+  const { collectorEarningsToday, collectorEarningsWeek, isDarkMode, walletBalance, debitWallet } = useApp();
   const C = getColors(isDarkMode);
+  const { showAlert, alertProps } = useCustomAlert();
 
+  const currentBal = walletBalance > 0 ? walletBalance : 428.5;
+  const balanceDisplay = `GH₵ ${currentBal.toFixed(2)}`;
   const today = collectorEarningsToday > 0 ? `GH₵ ${collectorEarningsToday.toFixed(2)}` : 'GH₵ 85.00';
   const week  = collectorEarningsWeek  > 0 ? `GH₵ ${collectorEarningsWeek.toFixed(2)}`  : 'GH₵ 340.00';
+
+  const handleRequestPayout = () => {
+    if (currentBal <= 0) {
+      showAlert({
+        type: 'warning',
+        title: 'Zero Balance',
+        message: 'You have no available balance to request a payout.',
+      });
+      return;
+    }
+
+    showAlert({
+      type: 'info',
+      title: 'Request Payout',
+      message: `Transfer GH₵ ${currentBal.toFixed(2)} to your registered Mobile Money (MTN Momo ...4392)?`,
+      actions: [
+        {
+          label: 'Confirm Transfer',
+          variant: 'primary',
+          onPress: async () => {
+            if (walletBalance > 0) {
+              await debitWallet(walletBalance, 'Payout to MTN Momo');
+            }
+            showAlert({
+              type: 'success',
+              title: 'Payout Initiated',
+              message: `GH₵ ${currentBal.toFixed(2)} has been sent to your Mobile Money account. Funds will reflect within minutes.`,
+            });
+          },
+        },
+        {
+          label: 'Cancel',
+          variant: 'secondary',
+          onPress: () => {},
+        },
+      ],
+    });
+  };
 
   const iconColor = isDarkMode ? '#B6FF3C' : '#003527';
 
@@ -49,8 +93,12 @@ export default function Earnings() {
           <View style={styles.balanceDecorTR} />
           <View style={styles.balanceDecorBL} />
           <Text style={styles.balanceLabel}>Available Balance</Text>
-          <Text style={styles.balanceAmount}>GH₵ 428.50</Text>
-          <TouchableOpacity style={[styles.payoutBtn, { backgroundColor: isDarkMode ? '#B6FF3C' : '#6cf8bb' }]}>
+          <Text style={styles.balanceAmount}>{balanceDisplay}</Text>
+          <TouchableOpacity
+            style={[styles.payoutBtn, { backgroundColor: isDarkMode ? '#B6FF3C' : '#6cf8bb' }]}
+            onPress={handleRequestPayout}
+            activeOpacity={0.8}
+          >
             <Text style={[styles.payoutBtnText, { color: isDarkMode ? '#0B3D2E' : '#003527' }]}>Request Payout</Text>
           </TouchableOpacity>
         </View>
@@ -123,12 +171,17 @@ export default function Earnings() {
             <Text style={[styles.payoutMethodLabel, { color: C.greyText }]}>Payout Method</Text>
             <Text style={[styles.payoutMethodValue, { color: C.text }]}>MTN Momo (...4392)</Text>
           </View>
-          <TouchableOpacity style={styles.editBtn}>
+          <TouchableOpacity
+            style={styles.editBtn}
+            onPress={() => router.push('/payment-methods' as any)}
+            activeOpacity={0.8}
+          >
             <Text style={[styles.editBtnText, { color: C.iconPrimary }]}>Edit</Text>
           </TouchableOpacity>
         </View>
 
       </ScrollView>
+      <CustomAlert {...alertProps} />
     </SafeAreaView>
   );
 }

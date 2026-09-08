@@ -86,7 +86,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export default function ClassifyScreen() {
   const router = useRouter();
-  const { isDarkMode } = useApp();
+  const { isDarkMode, addEcoPoints } = useApp();
   const C = getColors(isDarkMode);
   const { showAlert, alertProps } = useCustomAlert();
 
@@ -246,9 +246,11 @@ export default function ClassifyScreen() {
   };
 
   const handleLogItem = () => {
+    const pts = currentResult.ecoPoints || 25;
+    addEcoPoints(pts);
     showAlert({
       type: "success",
-      title: `Item Logged! +${currentResult.ecoPoints} Eco-Points`,
+      title: `Item Logged! +${pts} Eco-Points`,
       message: `${currentResult.name} was successfully added to your recycling ledger.`,
     });
   };

@@ -26,7 +26,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function EditProfileScreen() {
   const router = useRouter();
   const { isDarkMode, userName, setUserName, userPhone, setUserPhone } = useApp();
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const C = getColors(isDarkMode);
   const { showAlert, alertProps } = useCustomAlert();
 
@@ -63,7 +63,29 @@ export default function EditProfileScreen() {
   };
 
   const handleSave = async () => {
-    if (!user) return;
+    if (name.trim().length < 2) {
+      showAlert({
+        type: 'error',
+        title: 'Name Required',
+        message: 'Please enter at least two characters for your name.',
+      });
+      return;
+    }
+
+    if (!user) {
+      setUserName(name.trim());
+      setUserPhone(phone.trim());
+      showAlert({
+        type: 'success',
+        title: 'Profile Updated',
+        message: 'Your profile details have been updated.',
+      });
+      setTimeout(() => {
+        router.back();
+      }, 1500);
+      return;
+    }
+
     setIsSaving(true);
     try {
       let finalAvatarUrl = null;
@@ -72,13 +94,14 @@ export default function EditProfileScreen() {
       }
 
       await updateProfile({
-        full_name: name,
-        phone: phone,
+        full_name: name.trim(),
+        phone: phone.trim(),
         ...(finalAvatarUrl ? { avatar_url: finalAvatarUrl } : {}),
       });
       
       setUserName(name);
-      setUserPhone(phone);
+      setUserPhone(phone.trim());
+      await refreshProfile();
 
       showAlert({
         type: 'success',

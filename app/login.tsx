@@ -50,8 +50,8 @@ const COUNTRY_CODES: CountryCode[] = [
 
 export default function Login() {
   const router = useRouter();
-  const { setIsLoggedIn, setUserPhone, setUserName, setUserRole } = useApp();
-  const { user, signIn, signUp, signInWithGoogle } = useAuth();
+  const { setIsLoggedIn, setUserPhone, setUserName } = useApp();
+  const { signIn, signUp, signInWithGoogle } = useAuth();
 
   const [authMode, setAuthMode] = useState<"signup" | "login">("signup");
   const [selectedRole, setSelectedRole] = useState<"customer" | "collector">("customer");
@@ -59,6 +59,8 @@ export default function Login() {
   const [isCountryModalVisible, setIsCountryModalVisible] = useState(false);
   const [countrySearch, setCountrySearch] = useState("");
   const [phoneVal, setPhoneVal] = useState("");
+  const [emailVal, setEmailVal] = useState("");
+  const [passwordVal, setPasswordVal] = useState("");
   const [nameVal, setNameVal] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -79,43 +81,47 @@ export default function Login() {
       setErrorMsg("Please enter your full name.");
       return;
     }
-    if (phoneVal.trim().length < 7) {
-      setErrorMsg(`Please enter a valid phone number.`);
+    if (authMode === "signup" && phoneVal.trim().length < 7) {
+      setErrorMsg("Please enter a valid phone number.");
+      return;
+    }
+    if (!/^\S+@\S+\.\S+$/.test(emailVal.trim())) {
+      setErrorMsg("Please enter a valid email address.");
+      return;
+    }
+    if (passwordVal.length < 8) {
+      setErrorMsg("Password must be at least 8 characters.");
       return;
     }
     setErrorMsg("");
     setIsLoading(true);
 
     const fullPhone = `${selectedCountry.code}${phoneVal.replace(/\D/g, "")}`;
-    const email = `${phoneVal.replace(/\D/g, "")}@ecolift.app`;
-    const digits = phoneVal.replace(/\D/g, "");
-    const password = `Eco${digits.slice(-4)}@2026`;
-    const legacyPassword = "Ecolift@2026";
 
     try {
       if (authMode === "signup") {
         try {
-          await signUp(email, password, nameVal.trim(), fullPhone, selectedRole);
+          const hasSession = await signUp(emailVal.trim(), passwordVal, nameVal.trim(), fullPhone, selectedRole);
+          if (!hasSession) {
+            setErrorMsg("Account created. Check your email to verify your account before logging in.");
+            return;
+          }
         } catch (signUpErr: any) {
           const msg: string = signUpErr?.message || "";
           if (msg.includes("already registered") || msg.includes("already exists") || msg.includes("User already registered")) {
-            try { await signIn(email, password); } catch { await signIn(email, legacyPassword); }
+            throw new Error("An account with this email already exists. Log in instead.");
           } else { throw signUpErr; }
         }
       } else {
-        try { await signIn(email, password); } catch { await signIn(email, legacyPassword); }
+        await signIn(emailVal.trim(), passwordVal);
       }
 
-      setUserPhone(fullPhone);
-      setUserName(nameVal.trim() || "Ecolift User");
-      setUserRole(selectedRole);
+      if (authMode === "signup") {
+        setUserPhone(fullPhone);
+        setUserName(nameVal.trim() || "Ecolift User");
+      }
       setIsLoggedIn(true);
-
-      if (selectedRole === "collector") {
-        router.replace("/(tabs-collector)");
-      } else {
-        router.replace("/(tabs)");
-      }
+      router.replace("/");
     } catch (err: any) {
       const msg: string = err?.message || "";
       if (msg.includes("provider is not enabled") || msg.includes("Unsupported provider")) {
@@ -123,7 +129,7 @@ export default function Login() {
       } else if (msg.includes("Invalid login credentials")) {
         setErrorMsg(authMode === "signup"
           ? "Could not create account. Try logging in if you already have an account."
-          : "Incorrect phone number or account not found. Try signing up.");
+          : "Incorrect email or password. Try again or reset your password.");
       } else if (msg.includes("Email not confirmed")) {
         setErrorMsg("Please confirm your email before logging in.");
       } else {
@@ -141,10 +147,9 @@ export default function Login() {
       const completed = await signInWithGoogle();
       if (!completed) return;
       setUserPhone("");
-      setUserName(user?.full_name || "Google User");
-      setUserRole(selectedRole);
+      setUserName("Google User");
       setIsLoggedIn(true);
-      router.replace(selectedRole === "collector" ? "/(tabs-collector)" : "/(tabs)");
+      router.replace("/");
     } catch (err: any) {
       const msg = err?.message || "";
       if (msg.includes("provider is not enabled") || msg.includes("Unsupported provider")) {
@@ -276,8 +281,36 @@ export default function Login() {
                 </View>
               )}
 
-              {/* Phone input */}
               <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Email Address</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="you@example.com"
+                  placeholderTextColor="#9CA3AF"
+                  value={emailVal}
+                  onChangeText={setEmailVal}
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  keyboardType="email-address"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Password</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="At least 8 characters"
+                  placeholderTextColor="#9CA3AF"
+                  value={passwordVal}
+                  onChangeText={setPasswordVal}
+                  autoCapitalize="none"
+                  autoComplete={authMode === "signup" ? "new-password" : "password"}
+                  secureTextEntry
+                />
+              </View>
+
+              {/* Phone input is collected during registration only. */}
+              {authMode === "signup" && <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Phone Number</Text>
                 <View style={styles.phoneRow}>
                   <TouchableOpacity style={styles.countryPicker} onPress={() => setIsCountryModalVisible(true)}>
@@ -295,7 +328,7 @@ export default function Login() {
                     maxLength={12}
                   />
                 </View>
-              </View>
+              </View>}
 
               {/* Submit */}
               <TouchableOpacity
@@ -312,6 +345,15 @@ export default function Login() {
                   </Text>
                 )}
               </TouchableOpacity>
+
+              {authMode === "login" && (
+                <TouchableOpacity
+                  style={styles.forgotButton}
+                  onPress={() => router.push("/reset-password" as any)}
+                >
+                  <Text style={styles.forgotText}>Forgot password?</Text>
+                </TouchableOpacity>
+              )}
 
               <Text style={styles.termsText}>
                 By continuing you agree to the Ecolift{" "}
@@ -586,6 +628,15 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Medium",
     color: "#111827",
     backgroundColor: "#F9FAFB",
+  },
+  forgotButton: {
+    alignSelf: "center",
+    paddingVertical: 12,
+  },
+  forgotText: {
+    fontSize: 13,
+    fontFamily: "Poppins-SemiBold",
+    color: Colors.primary,
   },
   phoneRow: {
     flexDirection: "row",

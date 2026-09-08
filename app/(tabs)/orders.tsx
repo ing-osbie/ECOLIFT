@@ -1,6 +1,7 @@
 import { CustomAlert, useCustomAlert } from "@/components/custom-alert";
 import { getColors } from "@/constants/theme";
 import { useApp } from "@/context/AppContext";
+import { useAuth } from "@/src/context/AuthContext";
 import { useRouter } from "expo-router";
 import {
   ArrowRight,
@@ -77,6 +78,7 @@ const IMPACT_ORDERS: ImpactOrder[] = [
 export default function OrderHistory() {
   const router = useRouter();
   const { isDarkMode, orders } = useApp();
+  const { user } = useAuth();
   const C = getColors(isDarkMode);
   const { showAlert, alertProps } = useCustomAlert();
 
@@ -144,7 +146,7 @@ export default function OrderHistory() {
               </Text>
               <Image
                 source={{
-                  uri: "https://lh3.googleusercontent.com/aida/AP1WRLvvebFOZ6ynMsVwLT_RhMB47PIf8hxioUnplUngiLRck_uwziGuo8q9YO5aj1foVEUmhejlyafL2z2OHqEPi7FC8azbJoc-ziJbt6qsF5SMnw3GGseHcRNMOLhOvVO7v71vEGCzSy99We7_7rFyQI5Xzz2j4GcrsBMMWBjTRHPbwqUwGF-tolAZtlI0fp2FGa_-ATEKQMsHpKcZA_Q1cKK8GQq6hUUor6q0TpvsuD-ZBS35WmtkQvEqKtrn1A2MHmfBS2lh9XHmQQ",
+                  uri: user?.avatar_url || "https://lh3.googleusercontent.com/aida/AP1WRLvvebFOZ6ynMsVwLT_RhMB47PIf8hxioUnplUngiLRck_uwziGuo8q9YO5aj1foVEUmhejlyafL2z2OHqEPi7FC8azbJoc-ziJbt6qsF5SMnw3GGseHcRNMOLhOvVO7v71vEGCzSy99We7_7rFyQI5Xzz2j4GcrsBMMWBjTRHPbwqUwGF-tolAZtlI0fp2FGa_-ATEKQMsHpKcZA_Q1cKK8GQq6hUUor6q0TpvsuD-ZBS35WmtkQvEqKtrn1A2MHmfBS2lh9XHmQQ",
                 }}
                 style={styles.avatarImage}
               />
@@ -367,17 +369,12 @@ export default function OrderHistory() {
                       ]}
                       onPress={() => {
                         setSelectedOrder(null);
-                        showAlert({
-                          type: "success",
-                          title: "Receipt Sent",
-                          message:
-                            "Your recycling impact certificate has been sent to your email.",
-                        });
+                        router.push("/receipt" as any);
                       }}
                       activeOpacity={0.9}
                     >
                       <Text style={styles.modalDoneBtnText}>
-                        Download Receipt
+                        View Receipt
                       </Text>
                     </TouchableOpacity>
                   </View>

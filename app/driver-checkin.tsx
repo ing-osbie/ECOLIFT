@@ -32,7 +32,7 @@ let _cachedScan: 'idle' | 'scanning' | 'verified' = 'idle';
 
 export default function DriverCheckin() {
   const router = useRouter();
-  const { isDarkMode, userName, setUserRole, setIsCollectorVerified } = useApp();
+  const { isDarkMode, userName, setIsCollectorVerified } = useApp();
   const C = getColors(isDarkMode);
 
   const [scanState, setScanState] = useState<'idle' | 'scanning' | 'verified'>(_cachedScan);
@@ -83,7 +83,6 @@ export default function DriverCheckin() {
   const handleConfirm = () => {
     if (scanState !== 'verified') return;
     setIsSubmitting(true);
-    setUserRole('collector');
     setIsCollectorVerified(true);
     clearCache();
     setTimeout(() => {

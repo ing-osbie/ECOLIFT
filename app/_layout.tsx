@@ -101,6 +101,10 @@ export default function RootLayout() {
           <Stack.Screen name="recycling-centres" />
 
           <Stack.Screen name="rewards" />
+
+          <Stack.Screen name="edit-profile" />
+
+          <Stack.Screen name="reset-password" />
         </Stack>
       </AppContextProvider>
     </AuthProvider>

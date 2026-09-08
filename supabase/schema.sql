@@ -8,7 +8,11 @@
 -- ----------------------------------------------------------------------------
 
 do $$ begin
-  create type public.user_role as enum ('customer', 'collector', 'admin');
+  create type public.user_role as enum ('customer', 'collector', 'recycling_organisation', 'admin');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  alter type public.user_role add value if not exists 'recycling_organisation';
 exception when duplicate_object then null; end $$;
 
 do $$ begin
@@ -235,7 +239,7 @@ begin
     new.email,
     coalesce(new.raw_user_meta_data->>'full_name', ''),
     coalesce(new.raw_user_meta_data->>'phone', ''),
-    coalesce((new.raw_user_meta_data->>'role')::public.user_role, 'customer')
+    'customer'
   )
   on conflict (id) do nothing;
 
@@ -261,6 +265,76 @@ begin
   return new;
 end;
 $$;
+
+-- Public clients may edit profile details, never their authorization role.
+create or replace function public.protect_profile_role()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    if new.role is distinct from old.role then
+      raise exception 'Only an administrator can change account roles';
+    end if;
+    if new.email is distinct from old.email or new.is_verified is distinct from old.is_verified then
+      raise exception 'Email and verification fields are server controlled';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists protect_profile_role on public.profiles;
+create trigger protect_profile_role
+before update on public.profiles
+for each row execute procedure public.protect_profile_role();
+
+-- Customers cannot assign collectors or alter lifecycle/payment values from the client.
+create or replace function public.protect_customer_order_updates()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  if auth.uid() = old.customer_id and not public.is_admin() then
+    if new.collector_id is distinct from old.collector_id
+      or new.status is distinct from old.status
+      or new.price is distinct from old.price
+      or new.payment_method is distinct from old.payment_method then
+      raise exception 'Order assignment and payment fields are server controlled';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.protect_customer_order_insert()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    if new.customer_id <> auth.uid() then
+      raise exception 'Orders can only be created for the authenticated customer';
+    end if;
+    new.collector_id := null;
+    new.status := 'matching';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists protect_customer_order_insert on public.orders;
+create trigger protect_customer_order_insert
+before insert on public.orders
+for each row execute procedure public.protect_customer_order_insert();
+
+drop trigger if exists protect_customer_order_updates on public.orders;
+create trigger protect_customer_order_updates
+before update on public.orders
+for each row execute procedure public.protect_customer_order_updates();
 
 drop trigger if exists set_profiles_updated_at on public.profiles;
 create trigger set_profiles_updated_at before update on public.profiles for each row execute procedure public.set_updated_at();
@@ -928,13 +1002,13 @@ alter table public.chat_messages enable row level security;
 -- Profiles
 drop policy if exists "Users can view own profile" on public.profiles;
 drop policy if exists "Profiles are viewable by authenticated users" on public.profiles;
-create policy "Profiles are viewable by authenticated users" on public.profiles for select using (true);
+create policy "Profiles are viewable by authenticated users" on public.profiles for select using (auth.uid() = id or public.is_admin());
 
 drop policy if exists "Users can update own profile" on public.profiles;
-create policy "Users can update own profile" on public.profiles for update using (auth.uid() = id);
+create policy "Users can update own profile" on public.profiles for update using (auth.uid() = id) with check (auth.uid() = id);
 
 drop policy if exists "Users can insert own profile" on public.profiles;
-create policy "Users can insert own profile" on public.profiles for insert with check (auth.uid() = id);
+create policy "Users can insert own profile" on public.profiles for insert with check (auth.uid() = id and role = 'customer');
 
 drop policy if exists "Admins can view all profiles" on public.profiles;
 create policy "Admins can view all profiles" on public.profiles for select using (public.is_admin());
@@ -969,13 +1043,30 @@ create policy "Vehicle types are publicly readable" on public.vehicle_types for 
 
 -- Collectors
 drop policy if exists "Collectors are publicly viewable" on public.collectors;
-create policy "Collectors are publicly viewable" on public.collectors for select using (true);
+create policy "Collectors are publicly viewable" on public.collectors for select using (auth.uid() is not null);
 
 drop policy if exists "Collectors can update own record" on public.collectors;
 create policy "Collectors can update own record" on public.collectors for update using (auth.uid() = id);
 
+create or replace function public.protect_collector_verification()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  if not public.is_admin() and new.is_verified is distinct from old.is_verified then
+    raise exception 'Only an administrator can change collector verification';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists protect_collector_verification on public.collectors;
+create trigger protect_collector_verification
+before update on public.collectors
+for each row execute procedure public.protect_collector_verification();
+
 drop policy if exists "Collectors can insert own record" on public.collectors;
-create policy "Collectors can insert own record" on public.collectors for insert with check (auth.uid() = id);
 
 -- Orders
 drop policy if exists "Customers can view own orders" on public.orders;
@@ -1077,6 +1168,27 @@ exception when others then null; end $$;
 do $$ begin
   alter publication supabase_realtime add table public.chat_messages;
 exception when others then null; end $$;
+
+  -- Profile photo storage: users can only manage their own avatar directory.
+  insert into storage.buckets (id, name, public)
+  values ('avatars', 'avatars', true)
+  on conflict (id) do update set public = true;
+
+  drop policy if exists "Users can upload own avatars" on storage.objects;
+  create policy "Users can upload own avatars" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+  drop policy if exists "Users can update own avatars" on storage.objects;
+  create policy "Users can update own avatars" on storage.objects
+  for update to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text)
+  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+  drop policy if exists "Users can delete own avatars" on storage.objects;
+  create policy "Users can delete own avatars" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
 
 do $$ begin
   alter publication supabase_realtime add table public.support_tickets;

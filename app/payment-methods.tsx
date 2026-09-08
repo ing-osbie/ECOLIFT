@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -10,12 +10,15 @@ import {
   Platform 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useRouter } from 'expo-router';
 import { GradientBackground } from '@/components/gradient-background';
 import { GlassCard } from '@/components/glass-card';
 import { Colors, getColors } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
+import { useAuth } from '@/src/context/AuthContext';
+import * as walletService from '@/src/services/wallet';
 import { CustomAlert, useCustomAlert } from '@/components/custom-alert';
 import { CreditCard, Smartphone, ArrowLeft, Plus, Check, Trash2, X, ShieldCheck } from 'lucide-react-native';
 
@@ -30,6 +33,7 @@ interface PaymentMethod {
 export default function PaymentMethods() {
   const router = useRouter();
   const { isDarkMode, selectedPaymentMethod, setSelectedPaymentMethod } = useApp();
+  const { user } = useAuth();
   const C = getColors(isDarkMode);
   const { showAlert, alertProps } = useCustomAlert();
 
@@ -37,6 +41,38 @@ export default function PaymentMethods() {
     { id: '1', type: 'momo', name: 'MTN Mobile Money', details: '+233 24 123 4567', isDefault: selectedPaymentMethod === 'moolre_momo' },
     { id: '2', type: 'card', name: 'Visa Gold Card', details: '•••• •••• •••• 4291', isDefault: selectedPaymentMethod === 'card' },
   ]);
+
+  useEffect(() => {
+    // 1. Try Supabase backend if authenticated
+    if (user?.id) {
+      walletService.getPaymentMethods(user.id).then((dbMethods) => {
+        if (dbMethods && dbMethods.length > 0) {
+          setMethods(
+            dbMethods.map((m) => ({
+              id: m.id,
+              type: m.type as "momo" | "card",
+              name: m.label || (m.type === "momo" ? "Mobile Money" : "Debit Card"),
+              details: (m.details as any)?.masked || "+233 ••• ••••",
+              isDefault: m.is_default,
+            }))
+          );
+          return;
+        }
+      }).catch(() => {});
+    }
+
+    // 2. Try AsyncStorage cached
+    AsyncStorage.getItem("@ecolift_payment_methods").then((saved) => {
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMethods(parsed);
+          }
+        } catch {}
+      }
+    }).catch(() => {});
+  }, [user?.id]);
 
   // Modal state for linking new card / wallet
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -78,9 +114,25 @@ export default function PaymentMethods() {
       isDefault: true,
     };
 
-    setMethods(prev => [newMethod, ...prev.map(m => ({ ...m, isDefault: false }))]);
+    const updated = [newMethod, ...methods.map(m => ({ ...m, isDefault: false }))];
+    setMethods(updated);
     setSelectedPaymentMethod(newType === 'momo' ? 'moolre_momo' : 'card');
     setIsModalVisible(false);
+
+    // Save to AsyncStorage
+    AsyncStorage.setItem("@ecolift_payment_methods", JSON.stringify(updated)).catch(() => {});
+
+    // Save to Supabase backend if authenticated
+    if (user?.id) {
+      walletService
+        .savePaymentMethod({
+          type: newType,
+          label: accountName.trim(),
+          details: { masked: maskedDetails, accountName: accountName.trim() },
+          is_default: true,
+        })
+        .catch((err) => console.warn("savePaymentMethod backend error:", err));
+    }
 
     // Clear form inputs
     setAccountName('');
@@ -96,11 +148,13 @@ export default function PaymentMethods() {
   };
 
   const handleDeleteMethod = (id: string, name: string) => {
-    setMethods(prev => prev.filter(m => m.id !== id));
+    const updated = methods.filter(m => m.id !== id);
+    setMethods(updated);
+    AsyncStorage.setItem("@ecolift_payment_methods", JSON.stringify(updated)).catch(() => {});
     showAlert({
       type: 'info',
-      title: 'Removed',
-      message: `${name} has been unlinked from your account.`,
+      title: 'Account Removed',
+      message: `${name} has been removed from your linked payment methods.`,
     });
   };
 

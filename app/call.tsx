@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Platform, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { GradientBackground } from '@/components/gradient-background';
 import { getColors } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
@@ -10,10 +10,11 @@ import { PhoneOff, Volume2, MicOff, ShieldCheck, User } from 'lucide-react-nativ
 
 export default function Call() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ name?: string }>();
   const { isDarkMode, selectedCollector } = useApp();
   const C = getColors(isDarkMode);
 
-  const collectorName = selectedCollector?.name || 'Kwame Mensah';
+  const collectorName = params.name || selectedCollector?.name || 'Kwame Mensah';
 
   const [seconds, setSeconds] = useState(0);
   const [muted, setMuted] = useState(false);

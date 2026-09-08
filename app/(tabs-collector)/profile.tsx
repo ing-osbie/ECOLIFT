@@ -32,14 +32,17 @@ const AVATAR_URI = 'https://lh3.googleusercontent.com/aida-public/AB6AXuBra7RcuL
 
 export default function CollectorProfile() {
   const router = useRouter();
-  const { userName, setIsLoggedIn, isDarkMode, toggleDarkMode, switchRole } = useApp();
-  const { signOut } = useAuth();
+  const { userName, setIsLoggedIn, isDarkMode, toggleDarkMode } = useApp();
+  const { signOut, user } = useAuth();
   const { showAlert, alertProps } = useCustomAlert();
   const C = getColors(isDarkMode);
 
   const handleSwitchToCustomer = async () => {
-    await switchRole('customer');
-    router.replace('/(tabs)');
+    showAlert({
+      type: 'info',
+      title: 'Role Controlled by Account',
+      message: 'Your account role is managed securely by EcoLift.',
+    });
   };
 
   const handleLogout = async () => {
@@ -83,7 +86,7 @@ export default function CollectorProfile() {
       iconBg: isDarkMode ? '#1a3530' : '#b0f0d6',
       iconColor: isDarkMode ? '#4edea3' : '#003527',
       icon: FileText,
-      onPress: () => showAlert({ type: 'success', title: 'Payout Method', message: 'MoMo account linked and verified for weekly disbursements.' }),
+      onPress: () => router.push('/payment-methods' as any),
     },
     {
       id: 'docs',
@@ -96,6 +99,15 @@ export default function CollectorProfile() {
       verified: true,
       onPress: () => router.push('/upload-id' as any),
     },
+    {
+      id: 'support',
+      title: 'Support & Safety',
+      sub: '24/7 Dispatch help & emergency',
+      iconBg: isDarkMode ? '#242035' : '#ede8f8',
+      iconColor: isDarkMode ? '#b5a4e8' : '#3d2080',
+      icon: HelpCircle,
+      onPress: () => router.push('/support' as any),
+    },
   ];
 
   return (
@@ -107,14 +119,18 @@ export default function CollectorProfile() {
 
         {/* Avatar */}
         <View style={styles.avatarSection}>
-          <View style={styles.avatarWrapper}>
+          <TouchableOpacity
+            style={styles.avatarWrapper}
+            onPress={() => router.push('/edit-profile' as any)}
+            activeOpacity={0.8}
+          >
             <View style={[styles.avatarGlow, { backgroundColor: isDarkMode ? '#B6FF3C' : '#6cf8bb' }]} />
-            <Image source={{ uri: AVATAR_URI }} style={[styles.avatar, { borderColor: C.card }]} />
-            <TouchableOpacity style={[styles.cameraBtn, { backgroundColor: C.iconPrimary }]}>
+            <Image source={{ uri: user?.avatar_url || AVATAR_URI }} style={[styles.avatar, { borderColor: C.card }]} />
+            <View style={[styles.cameraBtn, { backgroundColor: C.iconPrimary }]}>
               <Camera size={18} color={isDarkMode ? '#0B3D2E' : '#fff'} />
-            </TouchableOpacity>
-          </View>
-          <Text style={[styles.userName, { color: C.text }]}>{userName || 'Osborn Mensah'}</Text>
+            </View>
+          </TouchableOpacity>
+          <Text style={[styles.userName, { color: C.text }]}>{user?.full_name || userName || 'Osborn Mensah'}</Text>
           <View style={[styles.verifiedBadge, { backgroundColor: isDarkMode ? '#1a3d2e' : '#064e3b' }]}>
             <Text style={[styles.verifiedBadgeText, { color: isDarkMode ? '#6cf8bb' : '#80bea6' }]}>✓  Verified Ecolift Collector</Text>
           </View>

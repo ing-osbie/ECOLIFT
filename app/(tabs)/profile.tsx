@@ -41,18 +41,21 @@ export default function Profile() {
     userName,
     userPhone,
     walletBalance,
+    ecoPoints,
     setIsLoggedIn,
     isDarkMode,
     toggleDarkMode,
-    switchRole,
   } = useApp();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
   const C = getColors(isDarkMode);
   const { showAlert, alertProps } = useCustomAlert();
 
   const handleSwitchToDriver = async () => {
-    await switchRole("collector");
-    router.replace("/(tabs-collector)");
+    showAlert({
+      type: "info",
+      title: "Collector Access",
+      message: "Collector accounts must be approved by EcoLift before access is granted.",
+    });
   };
 
   const handleLogout = async () => {
@@ -73,6 +76,12 @@ export default function Profile() {
     });
   };
 
+  const avatarSource = {
+    uri:
+      user?.avatar_url ||
+      "https://lh3.googleusercontent.com/aida-public/AB6AXuBRcEQLQqFVq_Z9EQQxI7B6x63AgOG1CAiF9cV3iLrj7KVbslnRnsCyHSCnNyG2NkiUAuozmOuBzK5VTH5fpegCY9EAmAjvdnG6KO3-KzrWbFXNizfuhFXeFy-gWmEeGOWPmj-G-NOwQiDr4tsXl2-L78ESpEsbPKmrE5slJs9_lAsEY35rJGTk41-UEGdwDxxiWoZhlSJw1PAonyDAn8olrapgZV7s93vqBqTeQ6uO2h7pwfOCBYM_",
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: isDarkMode ? "#0E1412" : "#F9F9FF" }]}>
       <SafeAreaView style={styles.safeArea}>
@@ -85,14 +94,16 @@ export default function Profile() {
             <Text style={[styles.headerDivider, { color: C.greyText }]}>|</Text>
             <Text style={[styles.headerSubTitle, { color: C.text }]}>Profile</Text>
           </View>
-          <View style={styles.headerAvatarWrapper}>
+          <TouchableOpacity
+            style={styles.headerAvatarWrapper}
+            onPress={() => router.push("/edit-profile" as any)}
+            activeOpacity={0.8}
+          >
             <Image
-              source={{
-                uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuBRcEQLQqFVq_Z9EQQxI7B6x63AgOG1CAiF9cV3iLrj7KVbslnRnsCyHSCnNyG2NkiUAuozmOuBzK5VTH5fpegCY9EAmAjvdnG6KO3-KzrWbFXNizfuhFXeFy-gWmEeGOWPmj-G-NOwQiDr4tsXl2-L78ESpEsbPKmrE5slJs9_lAsEY35rJGTk41-UEGdwDxxiWoZhlSJw1PAonyDAn8olrapgZV7s93vqBqTeQ6uO2h7pwfOCBYM_",
-              }}
+              source={avatarSource}
               style={styles.headerAvatar}
             />
-          </View>
+          </TouchableOpacity>
         </View>
 
         <ScrollView
@@ -106,22 +117,24 @@ export default function Profile() {
             <View style={styles.glowBottomLeft} />
 
             {/* Avatar with Gradient Ring & Verified Badge */}
-            <View style={styles.avatarWrapper}>
+            <TouchableOpacity
+              style={styles.avatarWrapper}
+              onPress={() => router.push("/edit-profile" as any)}
+              activeOpacity={0.8}
+            >
               <Image
-                source={{
-                  uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuBRcEQLQqFVq_Z9EQQxI7B6x63AgOG1CAiF9cV3iLrj7KVbslnRnsCyHSCnNyG2NkiUAuozmOuBzK5VTH5fpegCY9EAmAjvdnG6KO3-KzrWbFXNizfuhFXeFy-gWmEeGOWPmj-G-NOwQiDr4tsXl2-L78ESpEsbPKmrE5slJs9_lAsEY35rJGTk41-UEGdwDxxiWoZhlSJw1PAonyDAn8olrapgZV7s93vqBqTeQ6uO2h7pwfOCBYM_",
-                }}
+                source={avatarSource}
                 style={styles.avatarImage}
               />
               <View style={styles.verifiedDot}>
                 <CheckCircle2 size={13} color="#006C49" />
               </View>
-            </View>
+            </TouchableOpacity>
 
             {/* User Name & Membership */}
             <View style={styles.userNameBlock}>
               <Text style={styles.profileNameText}>
-                {userName || "Maya Rodriguez"}
+                {user?.full_name || userName || "Maya Rodriguez"}
               </Text>
               <Text style={styles.profileRoleText}>Eco-Citizen Member</Text>
             </View>
@@ -137,7 +150,7 @@ export default function Profile() {
               </View>
               <View style={styles.ecoPointsInfo}>
                 <Text style={styles.ecoPointsLabel}>Available Balance</Text>
-                <Text style={styles.ecoPointsValue}>2,450 Eco-Points</Text>
+                <Text style={styles.ecoPointsValue}>{ecoPoints.toLocaleString()} Eco-Points</Text>
               </View>
               <ChevronRight size={18} color="#95D3BA" />
             </TouchableOpacity>

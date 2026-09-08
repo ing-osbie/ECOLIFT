@@ -46,11 +46,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        await loadProfile(session.user.id);
-      } else {
-        setUser(null);
-      }
+        if (session?.user) {
+          setLoading(true);
+          setTimeout(() => {
+            loadProfile(session.user.id).finally(() => setLoading(false));
+          }, 0);
+        } else {
+          setUser(null);
+          setLoading(false);
+        }
     });
 
     return () => {
@@ -70,10 +74,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fullName: string,
     phone: string,
     role: UserRole,
-  ) => {
+  ): Promise<boolean> => {
     const data = await authService.signUp(email, password, fullName, phone, role);
     const userId = data?.session?.user?.id ?? data?.user?.id ?? (await authService.getCurrentSession())?.user?.id;
     if (userId) await loadProfile(userId);
+    return Boolean(data?.session);
   };
 
   const signInWithGoogle = async () => {
@@ -85,15 +90,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return completed;
   };
 
+  const requestPasswordReset = async (email: string) => {
+    await authService.requestPasswordReset(email);
+  };
+
+  const updatePassword = async (password: string) => {
+    await authService.updatePassword(password);
+  };
+
   const signOut = async () => {
     await authService.signOut();
     setUser(null);
   };
 
   const refreshProfile = useCallback(async () => {
-    if (!user?.id) return;
-    await loadProfile(user.id);
-  }, [user?.id, loadProfile]);
+    const currentUserId = user?.id;
+    if (!currentUserId) return;
+    await loadProfile(currentUserId);
+  }, [user, loadProfile]);
 
   return (
     <AuthContext.Provider
@@ -103,6 +117,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signIn,
         signUp,
         signInWithGoogle,
+        requestPasswordReset,
+        updatePassword,
         signOut,
         refreshProfile,
       }}

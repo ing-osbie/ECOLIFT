@@ -77,17 +77,16 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 
 export default function TabLayout() {
   const { user, loading } = useAuth();
-  const { userRole } = useApp();
   const router = useRouter();
 
   useEffect(() => {
     if (loading) return;
     if (!user) {
       router.replace('/login');
-    } else if (userRole === 'collector') {
+    } else if (user.role === 'collector') {
       router.replace('/(tabs-collector)');
     }
-  }, [user, userRole, loading]);
+  }, [user, loading, router]);
 
   return (
     <Tabs

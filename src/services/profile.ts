@@ -26,7 +26,7 @@ export async function getProfile(userId?: string): Promise<Profile | null> {
     const email = session?.user?.email ?? "";
     const fullName = meta.full_name ?? "";
     const phone = meta.phone ?? "";
-    const role = (meta.role as "customer" | "collector" | "admin") ?? "customer";
+    const role = "customer" as const;
 
     const { data: created, error: insertError } = await supabase
       .from("profiles")
@@ -48,17 +48,7 @@ export async function getProfile(userId?: string): Promise<Profile | null> {
         "Profile RLS insertion fallback active:",
         insertError.message
       );
-      return {
-        id,
-        email,
-        full_name: fullName,
-        phone,
-        role,
-        avatar_url: null,
-        is_verified: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
+      throw insertError;
     }
 
     // Also ensure wallet exists
@@ -104,10 +94,13 @@ export async function uploadAvatar(
 
   const ext = mimeType.split("/")[1] || "jpg";
   const filePath = `${userId}/avatar.${ext}`;
+    const response = await fetch(fileUri);
+    if (!response.ok) throw new Error("Unable to read the selected image.");
+    const file = await response.blob();
 
   const { error: uploadError } = await supabase.storage
     .from("avatars")
-    .upload(filePath, fileUri, {
+      .upload(filePath, file, {
       upsert: true,
       contentType: mimeType,
     });
