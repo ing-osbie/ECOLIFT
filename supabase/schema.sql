@@ -239,7 +239,11 @@ begin
     new.email,
     coalesce(new.raw_user_meta_data->>'full_name', ''),
     coalesce(new.raw_user_meta_data->>'phone', ''),
-    'customer'
+    case
+      when new.raw_user_meta_data->>'role' in ('customer', 'collector', 'recycling_organisation', 'admin')
+        then (new.raw_user_meta_data->>'role')::public.user_role
+      else 'customer'::public.user_role
+    end
   )
   on conflict (id) do nothing;
 
@@ -258,9 +262,12 @@ create trigger on_auth_user_created
 
 -- Repair profiles for users created before the auth trigger was installed.
 -- This runs with definer privileges, but always uses auth.uid() as the profile id.
+drop function if exists public.ensure_my_profile(text, text);
+
 create or replace function public.ensure_my_profile(
   p_full_name text default '',
-  p_phone text default null
+  p_phone text default null,
+  p_role public.user_role default null
 )
 returns public.profiles
 language plpgsql
@@ -284,7 +291,15 @@ begin
     coalesce(v_email, ''),
     coalesce(nullif(trim(p_full_name), ''), ''),
     p_phone,
-    'customer'
+    coalesce(
+      p_role,
+      case
+        when (select raw_user_meta_data->>'role' from auth.users where id = v_user_id)
+          in ('customer', 'collector', 'recycling_organisation', 'admin')
+          then ((select raw_user_meta_data->>'role' from auth.users where id = v_user_id))::public.user_role
+        else 'customer'::public.user_role
+      end
+    )
   )
   on conflict (id) do update
   set full_name = case
@@ -303,8 +318,8 @@ begin
 end;
 $$;
 
-revoke all on function public.ensure_my_profile(text, text) from public;
-grant execute on function public.ensure_my_profile(text, text) to authenticated;
+revoke all on function public.ensure_my_profile(text, text, public.user_role) from public;
+grant execute on function public.ensure_my_profile(text, text, public.user_role) to authenticated;
 
 create or replace function public.set_updated_at()
 returns trigger

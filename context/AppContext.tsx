@@ -431,16 +431,15 @@ export const AppContextProvider: React.FC<{
     } finally {
       setIsLoadingData(false);
     }
-  }, [user?.id, user?.role]);
+  }, [user, setIsCollectorVerified]);
 
-  // Load data when the authenticated user changes
-  useEffect(() => {
+  const hydrateAuthenticatedUser = useCallback(async () => {
     if (user?.id) {
       setUserName(user.full_name || "Ecolift User");
       setUserPhone(user.phone || "");
       setUserRoleState(user.role === "collector" ? "collector" : "customer");
       setIsLoggedIn(true);
-      refreshData();
+      await refreshData();
     } else {
       // Reset to defaults when signed out
       setOrders([]);
@@ -451,6 +450,15 @@ export const AppContextProvider: React.FC<{
       setIsLoggedIn(false);
     }
   }, [user, refreshData]);
+
+  // Load data when the authenticated user changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void hydrateAuthenticatedUser();
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [hydrateAuthenticatedUser]);
 
   const topUpWallet = async (amount: number, description = "Wallet top-up") => {
     setWalletBalance((prev) => prev + amount);

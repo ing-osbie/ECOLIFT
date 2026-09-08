@@ -81,12 +81,16 @@ export default function TabLayout() {
 
   useEffect(() => {
     if (loading) return;
+
     if (!user) {
-      router.replace('/login');
-    } else if (user.role === 'collector') {
-      router.replace('/(tabs-collector)');
+      router.replace("/login");
+      return;
     }
-  }, [user, loading, router]);
+
+    if (user.role === "collector") {
+      router.replace("/(tabs-collector)");
+    }
+  }, [user, loading]);
 
   return (
     <Tabs

@@ -1,14 +1,7 @@
-/**
- * Web Google Map Component for EcoLift
- * Source: Google Maps Platform Code Assist
- *
- * Uses Google Maps Embed API for Web view, avoiding native-only react-native-maps
- * module issues on web browser targets while rendering real Google Maps.
- */
+/** Web OpenStreetMap component for EcoLift. */
 
 import { Colors, getColors } from "@/constants/theme";
 import { useApp } from "@/context/AppContext";
-import { getGoogleMapsApiKey } from "@/src/services/googleMaps";
 import { MapPin } from "lucide-react-native";
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
@@ -41,10 +34,10 @@ export const EcoliftMap: React.FC<EcoliftMapProps> = ({
 }) => {
   const { isDarkMode } = useApp();
   const C = getColors(isDarkMode);
-  const apiKey = getGoogleMapsApiKey();
-
   const primaryMarker = markers[0] || { latitude: 5.5593, longitude: -0.1974 };
-  const embedUrl = `https://www.google.com/maps/embed/v1/view?key=${apiKey}&center=${primaryMarker.latitude},${primaryMarker.longitude}&zoom=14&maptype=roadmap`;
+  const delta = 0.025;
+  const bbox = `${primaryMarker.longitude - delta},${primaryMarker.latitude - delta},${primaryMarker.longitude + delta},${primaryMarker.latitude + delta}`;
+  const embedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${primaryMarker.latitude},${primaryMarker.longitude}`;
 
   return (
     <View
@@ -54,9 +47,9 @@ export const EcoliftMap: React.FC<EcoliftMapProps> = ({
         { backgroundColor: isDarkMode ? "#1C1C1E" : "#E8F3EE" },
       ]}
     >
-      {/* Google Maps Embed API iframe on Web */}
+      {/* OpenStreetMap embed on web */}
       <iframe
-        title="Google Maps"
+        title="OpenStreetMap"
         width="100%"
         height="100%"
         style={{ border: 0, borderRadius: 16 }}

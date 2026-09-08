@@ -41,26 +41,86 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadProfile]);
 
   useEffect(() => {
-    checkUser();
+    let mounted = true;
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setTimeout(async () => {
+        if (!mounted) return;
+
         if (session?.user) {
           setLoading(true);
-          setTimeout(() => {
-            loadProfile(session.user.id).finally(() => setLoading(false));
-          }, 0);
+
+          try {
+            const profile = await profileService.getProfile(session.user.id);
+
+            if (!mounted) return;
+
+            setUser(profile);
+          } catch (error) {
+            console.error("Failed to load authenticated profile:", error);
+
+            if (!mounted) return;
+
+            setUser(null);
+          } finally {
+            if (mounted) {
+              setLoading(false);
+            }
+          }
         } else {
           setUser(null);
           setLoading(false);
         }
+      }, 0);
     });
 
+    const initialize = async () => {
+      try {
+        const session = await authService.getCurrentSession();
+
+        if (!mounted) return;
+
+        if (session?.user) {
+          setLoading(true);
+
+          try {
+            const profile = await profileService.getProfile(session.user.id);
+
+            if (!mounted) return;
+
+            setUser(profile);
+          } catch (error) {
+            console.error("Failed to load initial profile:", error);
+
+            if (!mounted) return;
+
+            setUser(null);
+          }
+        } else {
+          setUser(null);
+        }
+      } catch (error) {
+        console.error("Auth initialization error:", error);
+
+        if (mounted) {
+          setUser(null);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    initialize();
+
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
-  }, [checkUser, loadProfile]);
+  }, []);
 
   const signIn = async (email: string, password: string) => {
     const data = await authService.signIn(email, password);
@@ -76,17 +136,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     role: UserRole,
   ): Promise<boolean> => {
     const data = await authService.signUp(email, password, fullName, phone, role);
-    const userId = data?.session?.user?.id ?? data?.user?.id ?? (await authService.getCurrentSession())?.user?.id;
-    if (userId) await loadProfile(userId);
-    return Boolean(data?.session);
+
+    // Supabase may create the Auth user without creating a session
+    // when email confirmation is enabled. Do not attempt to load/create
+    // the profile until the user is actually authenticated.
+    if (data?.session?.user) {
+      await loadProfile(data.session.user.id);
+      return true;
+    }
+
+    return false;
   };
 
-  const signInWithGoogle = async () => {
-    const completed = await authService.signInWithGoogle();
+  const signInWithGoogle = async (
+    role?: "customer" | "collector",
+  ) => {
+    const completed = await authService.signInWithGoogle(role);
+
     if (completed) {
       const userId = (await authService.getCurrentSession())?.user?.id;
-      if (userId) await loadProfile(userId);
+
+      if (userId) {
+        await loadProfile(userId);
+      }
     }
+
     return completed;
   };
 

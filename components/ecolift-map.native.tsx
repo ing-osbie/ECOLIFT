@@ -4,7 +4,7 @@ import * as Location from "expo-location";
 import { MapPin } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
+import MapView, { Marker, Polyline, UrlTile } from "react-native-maps";
 
 export interface MapMarker {
   id: string;
@@ -24,7 +24,7 @@ export interface EcoliftMapProps {
   showUserLocation?: boolean;
 }
 
-// Native Google Map implementation using react-native-maps.
+// Native OpenStreetMap tile implementation using react-native-maps.
 // Bundled only on Android/iOS via the `.native.tsx` platform extension.
 export const EcoliftMap: React.FC<EcoliftMapProps> = ({
   markers = [],
@@ -102,10 +102,9 @@ export const EcoliftMap: React.FC<EcoliftMapProps> = ({
     <View style={[styles.container, style]}>
       <MapView
         ref={mapRef}
-        provider={PROVIDER_GOOGLE}
         style={styles.map}
+        mapType="none"
         initialRegion={initialRegion}
-        customMapStyle={isDarkMode ? darkMapStyle : lightMapStyle}
         showsUserLocation={showUserLocation}
         showsMyLocationButton={false}
         showsCompass={true}
@@ -120,6 +119,11 @@ export const EcoliftMap: React.FC<EcoliftMapProps> = ({
           }
         }}
       >
+        <UrlTile
+          urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          maximumZ={19}
+          flipY={false}
+        />
         {markers.map((marker) => (
           <Marker
             key={marker.id}
@@ -186,19 +190,3 @@ const styles = StyleSheet.create({
   },
 });
 
-const lightMapStyle: any[] = [];
-const darkMapStyle = [
-  {
-    elementType: "geometry",
-    stylers: [{ color: "#1C1C1E" }],
-  },
-  {
-    elementType: "labels.text.fill",
-    stylers: [{ color: "#8E8E93" }],
-  },
-  {
-    featureType: "water",
-    elementType: "geometry",
-    stylers: [{ color: "#0E1525" }],
-  },
-];

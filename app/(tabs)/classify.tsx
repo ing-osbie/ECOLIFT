@@ -129,7 +129,7 @@ export default function ClassifyScreen() {
         type: "success",
         title: "AI Key Configured",
         message: updated
-          ? "Google Gemini Vision AI is active for high-precision detection."
+          ? "Gemini 3.8 Flash Vision AI is active for high-precision detection."
           : "API key cleared. System switched to offline heuristics mode.",
       });
     } catch {
@@ -805,7 +805,7 @@ export default function ClassifyScreen() {
                   ]}
                 >
                   {activeApiKey
-                    ? "Connected: Google Gemini 2.5 Flash Vision"
+                    ? "Connected: Gemini 3.8 Flash Vision"
                     : "Running: Offline Heuristics Engine"}
                 </Text>
               </View>

@@ -32,11 +32,7 @@ export interface ClassificationResult {
 const API_KEY_STORAGE_KEY = '@ecolift_gemini_api_key';
 
 // Candidate models in order of precision and availability
-const GEMINI_MODELS = [
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-1.5-flash',
-];
+const GEMINI_MODELS = ['gemini-3.8-flash'];
 
 /**
  * Retrieve the active Gemini API key from environment variable or local AsyncStorage
@@ -118,7 +114,7 @@ async function getImageBase64(imageUri: string): Promise<string> {
   }
 }
 
-const SYSTEM_PROMPT = `You are EcoLift's Precision Waste Classification Vision AI.
+const SYSTEM_PROMPT = `You are EcoLift's Precision Waste Classification Vision AI. This prompt is the classification rubric: follow it as the highest-priority instruction for the image.
 Analyze the captured photo with extreme optical scrutiny, object localization, and material physics.
 
 DETECTION INSTRUCTIONS:
@@ -146,7 +142,7 @@ Output strictly valid JSON with no markdown formatting. Schema:
 }`;
 
 /**
- * Classifies an image using Google Gemini Vision API with high precision settings,
+ * Classifies an image using Gemini 3.8 Flash with an embedded classification prompt,
  * falling back gracefully through model versions or to domain-curated offline heuristics.
  */
 export async function classifyWasteImage(
@@ -199,6 +195,17 @@ export async function classifyWasteImage(
             topP: 0.8,
             maxOutputTokens: 800,
             responseMimeType: 'application/json',
+            responseSchema: {
+              type: 'OBJECT',
+              properties: {
+                name: { type: 'STRING' }, material: { type: 'STRING' },
+                category: { type: 'STRING' }, binType: { type: 'STRING' }, binColor: { type: 'STRING' },
+                confidence: { type: 'INTEGER' }, recyclable: { type: 'BOOLEAN' }, isWaste: { type: 'BOOLEAN' },
+                estimatedWeightGrams: { type: 'NUMBER' }, co2SavingsKg: { type: 'NUMBER' }, ecoPoints: { type: 'INTEGER' },
+                tips: { type: 'ARRAY', items: { type: 'STRING' } },
+              },
+              required: ['name', 'material', 'category', 'binType', 'binColor', 'confidence', 'recyclable', 'isWaste', 'estimatedWeightGrams', 'co2SavingsKg', 'ecoPoints', 'tips'],
+            },
           },
         }),
       });

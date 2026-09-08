@@ -3,7 +3,6 @@ import { UserRole } from "@/src/types/auth";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { Platform } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const REDIRECT_URL = "ecoliftapp://auth/callback";
 console.log("GOOGLE REDIRECT URL:", REDIRECT_URL);
@@ -93,17 +92,7 @@ export async function getCurrentUserId(): Promise<string | null> {
  * @returns `true` if a session was established, `false` if the user cancelled
  *          the OAuth flow (dismissed/closed the browser session).
  */
-export async function signInWithGoogle(
-  role?: "customer" | "collector",
-): Promise<boolean> {
-  // Preserve the selected signup role while the user is inside
-  // Google's OAuth browser flow.
-  if (role) {
-    await AsyncStorage.setItem("ecolift_google_signup_role", role);
-  } else {
-    await AsyncStorage.removeItem("ecolift_google_signup_role");
-  }
-
+export async function signInWithGoogle(): Promise<boolean> {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
@@ -137,26 +126,6 @@ export async function signInWithGoogle(
     await supabase.auth.exchangeCodeForSession(code);
 
   if (sessionError) throw sessionError;
-
-  // Google OAuth does not carry our app's selected role.
-  // Restore the role saved before opening Google and create the
-  // correct profile through the secure Supabase RPC.
-  const signupRole = await AsyncStorage.getItem(
-    "ecolift_google_signup_role",
-  );
-
-  if (signupRole === "customer" || signupRole === "collector") {
-    const { error: profileError } = await supabase.rpc(
-      "ensure_google_profile",
-      {
-        p_role: signupRole,
-      },
-    );
-
-    if (profileError) throw profileError;
-  }
-
-  await AsyncStorage.removeItem("ecolift_google_signup_role");
 
   return true;
 }

@@ -19,15 +19,25 @@ export async function getProfile(userId?: string): Promise<Profile | null> {
     return null;
   }
 
-  // Profile row missing — create it through the server-side RPC so RLS is not bypassed.
+  // Profile row missing — only create it when an authenticated
+  // Supabase session exists. This prevents auth.uid() from being NULL.
   if (!data) {
-    const session = await supabase.auth.getSession();
-    const metadata = session.data.session?.user?.user_metadata ?? {};
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.user) {
+      return null;
+    }
+
+    const metadata = session.user.user_metadata ?? {};
+
     const { data: created, error: insertError } = await supabase.rpc(
       "ensure_my_profile",
       {
         p_full_name: metadata.full_name ?? "",
         p_phone: metadata.phone ?? null,
+        p_role: metadata.role ?? null,
       },
     );
 

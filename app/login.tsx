@@ -145,7 +145,9 @@ export default function Login() {
     setErrorMsg("");
     setIsLoading(true);
     try {
-      const completed = await signInWithGoogle();
+      const completed = await signInWithGoogle(
+        authMode === "signup" ? selectedRole : undefined,
+      );
       if (!completed) return;
       setUserPhone("");
       setUserName("Google User");

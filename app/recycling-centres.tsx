@@ -395,7 +395,7 @@ export default function RecyclingCentresScreen() {
                           const url = Platform.select({
                             ios: `maps:0,0?q=${label}@${lat},${lng}`,
                             android: `geo:${lat},${lng}?q=${lat},${lng}(${label})`,
-                            default: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`,
+                            default: `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=16/${lat}/${lng}`,
                           });
                           if (url) Linking.openURL(url);
                         }}

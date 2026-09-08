@@ -1,24 +1,7 @@
-/**
- * Google Maps Platform Service for EcoLift
- * Source: Google Maps Platform Code Assist
- *
- * Provides typed helper functions for interacting with Google Maps Platform APIs:
- * - Geocoding API (Address to Lat/Lng)
- * - Reverse Geocoding API (Lat/Lng to Address)
- * - Place Details API (Place information & Opening Hours)
- * - Directions API (Route calculation & Waypoint coordinates)
- */
+/** OpenStreetMap-compatible geocoding and routing service for EcoLift. */
 
-export const getGoogleMapsApiKey = (): string => {
-  const key = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
-  if (!key) {
-    console.warn(
-      "[Google Maps Service] EXPO_PUBLIC_GOOGLE_MAPS_API_KEY is not set. " +
-        "Add it to your .env file. Map features will be unavailable.",
-    );
-  }
-  return key || "";
-};
+const NOMINATIM_URL = "https://nominatim.openstreetmap.org";
+const OSRM_URL = "https://router.project-osrm.org";
 
 export interface LatLng {
   latitude: number;
@@ -50,131 +33,117 @@ export interface RouteResult {
 
 /**
  * Geocode a search string into geographic coordinates and formatted address
- * using the Google Maps Geocoding API worldwide.
+ * using OpenStreetMap's Nominatim service.
  */
 export async function geocodeAddress(
   address: string,
   regionBias?: string,
 ): Promise<GeocodeResult[]> {
-  const apiKey = getGoogleMapsApiKey();
   const encodedAddress = encodeURIComponent(address.trim());
-  const regionParam = regionBias ? `&region=${regionBias}` : "";
-  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}${regionParam}&key=${apiKey}`;
+  const countryParam = regionBias ? `&countrycodes=${encodeURIComponent(regionBias)}` : "";
+  const url = `${NOMINATIM_URL}/search?format=jsonv2&addressdetails=1&limit=5&q=${encodedAddress}${countryParam}`;
 
   try {
     const response = await fetch(url);
     const data = await response.json();
 
-    if (data.status !== "OK" || !data.results) {
+    if (!Array.isArray(data)) {
       return [];
     }
 
-    return data.results.map((res: any) => ({
-      placeId: res.place_id,
-      formattedAddress: res.formatted_address,
-      name: res.formatted_address.split(",")[0] || address,
+    return data.map((res: any) => ({
+      placeId: `osm:${res.lat}:${res.lon}`,
+      formattedAddress: res.display_name,
+      name: res.name || res.display_name.split(",")[0] || address,
       location: {
-        latitude: res.geometry.location.lat,
-        longitude: res.geometry.location.lng,
+        latitude: Number(res.lat),
+        longitude: Number(res.lon),
       },
     }));
   } catch (error) {
-    console.warn("[Google Maps Service] Geocoding error:", error);
+    console.warn("[OpenStreetMap Service] Geocoding error:", error);
     return [];
   }
 }
 
 /**
  * Convert latitude and longitude into a human-readable street address
- * using the Google Maps Reverse Geocoding API.
+ * using OpenStreetMap's Nominatim service.
  */
 export async function reverseGeocode(coords: LatLng): Promise<string | null> {
-  const apiKey = getGoogleMapsApiKey();
-  const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${coords.latitude},${coords.longitude}&key=${apiKey}`;
+  const url = `${NOMINATIM_URL}/reverse?format=jsonv2&lat=${coords.latitude}&lon=${coords.longitude}`;
 
   try {
     const response = await fetch(url);
     const data = await response.json();
 
-    if (data.status === "OK" && data.results && data.results.length > 0) {
-      return data.results[0].formatted_address;
+    if (data.display_name) {
+      return data.display_name;
     }
     return null;
   } catch (error) {
-    console.warn("[Google Maps Service] Reverse Geocoding error:", error);
+    console.warn("[OpenStreetMap Service] Reverse Geocoding error:", error);
     return null;
   }
 }
 
 /**
- * Fetch detailed place information using Google Maps Place Details API.
+ * Resolve a Nominatim result into the existing place-details shape.
  */
 export async function getPlaceDetails(
   placeId: string,
 ): Promise<PlaceDetailsResult | null> {
-  const apiKey = getGoogleMapsApiKey();
-  const fields = "place_id,name,formatted_address,geometry,opening_hours";
-  const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=${fields}&key=${apiKey}`;
-
   try {
-    const response = await fetch(url);
-    const data = await response.json();
-
-    if (data.status === "OK" && data.result) {
-      const place = data.result;
+    const [prefix, latitude, longitude] = placeId.split(":");
+    if (prefix !== "osm" || !latitude || !longitude) return null;
+    const address = await reverseGeocode({ latitude: Number(latitude), longitude: Number(longitude) });
+    if (address) {
       return {
-        placeId: place.place_id,
-        name: place.name,
-        formattedAddress: place.formatted_address,
-        location: {
-          latitude: place.geometry.location.lat,
-          longitude: place.geometry.location.lng,
-        },
-        isOpenNow: place.opening_hours?.open_now,
+        placeId,
+        name: address.split(",")[0],
+        formattedAddress: address,
+        location: { latitude: Number(latitude), longitude: Number(longitude) },
       };
     }
     return null;
   } catch (error) {
-    console.warn("[Google Maps Service] Place details error:", error);
+    console.warn("[OpenStreetMap Service] Place details error:", error);
     return null;
   }
 }
 
 /**
  * Calculate driving directions and route coordinates between origin and destination
- * using the Google Maps Directions API.
+ * using the public OSRM routing service.
  */
 export async function getDirections(
   origin: LatLng,
   destination: LatLng,
 ): Promise<RouteResult | null> {
-  const apiKey = getGoogleMapsApiKey();
-  const originStr = `${origin.latitude},${origin.longitude}`;
-  const destStr = `${destination.latitude},${destination.longitude}`;
-  const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${originStr}&destination=${destStr}&mode=driving&key=${apiKey}`;
+  const coordinates = `${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}`;
+  const url = `${OSRM_URL}/route/v1/driving/${coordinates}?overview=full&geometries=polyline`;
 
   try {
     const response = await fetch(url);
     const data = await response.json();
 
-    if (data.status === "OK" && data.routes && data.routes.length > 0) {
+    if (data.code === "Ok" && data.routes && data.routes.length > 0) {
       const route = data.routes[0];
-      const leg = route.legs[0];
 
       // Simple overview polyline decoding into LatLng points
-      const points: LatLng[] = decodePolyline(route.overview_polyline.points);
+      const points: LatLng[] = decodePolyline(route.geometry);
 
       return {
-        distanceText: leg.distance.text,
-        distanceValue: leg.distance.value,
-        durationText: leg.duration.text,
-        durationValue: leg.duration.value,
+        distanceText: `${(route.distance / 1000).toFixed(1)} km`,
+        distanceValue: route.distance,
+        durationText: `${Math.round(route.duration / 60)} min`,
+        durationValue: route.duration,
         points,
       };
     }
     return null;
   } catch (error) {
-    console.warn("[Google Maps Service] Directions error:", error);
+    console.warn("[OpenStreetMap Service] Directions error:", error);
     return null;
   }
 }

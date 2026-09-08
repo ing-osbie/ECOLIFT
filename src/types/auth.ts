@@ -36,7 +36,7 @@ export interface AuthContextType {
     phone: string,
     role: UserRole,
   ) => Promise<boolean>;
-  signInWithGoogle: () => Promise<boolean>;
+  signInWithGoogle: (role?: "customer" | "collector") => Promise<boolean>;
   requestPasswordReset: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
   signOut: () => Promise<void>;

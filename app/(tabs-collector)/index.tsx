@@ -1,6 +1,6 @@
 import { CustomAlert, useCustomAlert } from "@/components/custom-alert";
 import { EcoliftMap } from "@/components/ecolift-map";
-import { Colors, getColors } from "@/constants/theme";
+import { getColors } from "@/constants/theme";
 import { useApp } from "@/context/AppContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -81,10 +81,14 @@ export default function CollectorHome() {
     let timer: any;
     if (activeJobState === "offered" && offerCountdown > 0) {
       timer = setInterval(() => {
-        setOfferCountdown((prev) => prev - 1);
+        setOfferCountdown((prev) => {
+          if (prev <= 1) {
+            setActiveJobState("idle");
+            return 0;
+          }
+          return prev - 1;
+        });
       }, 1000);
-    } else if (offerCountdown === 0 && activeJobState === "offered") {
-      setActiveJobState("idle");
     }
     return () => clearInterval(timer);
   }, [activeJobState, offerCountdown]);
@@ -404,7 +408,7 @@ export default function CollectorHome() {
                       { color: isDarkMode ? "#8E9A94" : "#718096" },
                     ]}
                   >
-                    Today's Earnings
+                    Today&apos;s Earnings
                   </Text>
                   <Text
                     style={[

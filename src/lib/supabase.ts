@@ -35,6 +35,9 @@ export const supabase: SupabaseClient = createClient(
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: Platform.OS === "web",
+      // Web OAuth uses a full-page redirect and Supabase restores the session
+      // from the callback URL. Native OAuth exchanges an authorization code.
+      flowType: Platform.OS === "web" ? "implicit" : "pkce",
     },
   },
 );

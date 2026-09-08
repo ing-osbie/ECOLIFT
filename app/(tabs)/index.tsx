@@ -23,8 +23,6 @@ import {
   PhoneCall,
   Recycle,
   Search,
-  ShoppingBag,
-  Sun,
   Truck,
   X,
 } from "lucide-react-native";
@@ -45,7 +43,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { geocodeAddress, getPlaceDetails, reverseGeocode } from "@/src/services/googleMaps";
-import { getNotifications, markAllNotificationsRead } from "@/src/services/notifications";
+import { getNotifications } from "@/src/services/notifications";
 import { subscribeToOrderById } from "@/src/services/orders";
 import { Order as DbOrder } from "@/src/types/order";
 import { useAuth } from "@/src/context/AuthContext";
@@ -150,7 +148,6 @@ const DEFAULT_DISPOSAL_STATIONS: LocationResult[] = [
 export default function UserHome() {
   const router = useRouter();
   const {
-    userName,
     isDarkMode,
     selectedWasteType,
     pickupAddress,
@@ -328,7 +325,7 @@ export default function UserHome() {
     }
   };
 
-  // Fetch Google Place Details by Place ID via Google Maps Service
+  // Resolve an OpenStreetMap result by its stable coordinate identifier.
   const fetchPlaceDetailsById = async (placeId: string) => {
     try {
       const place = await getPlaceDetails(placeId);
@@ -352,7 +349,7 @@ export default function UserHome() {
     }
   };
 
-  // Fetch real Places / Geocoding results worldwide from Google Maps API service
+  // Fetch real place and geocoding results worldwide from OpenStreetMap.
   const handleSearchTextChange = async (text: string) => {
     setSearchQuery(text);
     if (!text.trim()) {
@@ -381,7 +378,7 @@ export default function UserHome() {
         setSearchResults(filtered);
       }
     } catch (e) {
-      console.warn("Google Maps Geocoding API search error:", e);
+      console.warn("OpenStreetMap geocoding search error:", e);
     } finally {
       setIsSearching(false);
     }
@@ -803,7 +800,7 @@ export default function UserHome() {
                           { color: C.greyText },
                         ]}
                       >
-                        No locations found for "{searchQuery}"
+                        No locations found for &quot;{searchQuery}&quot;
                       </Text>
                     </View>
                   )}
