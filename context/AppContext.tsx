@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, {
   createContext,
   useCallback,
@@ -5,7 +6,6 @@ import React, {
   useEffect,
   useState,
 } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { useAuth } from "@/src/context/AuthContext";
 import * as collectorService from "@/src/services/collector";
@@ -15,7 +15,7 @@ import * as schedulesService from "@/src/services/schedules";
 import * as walletService from "@/src/services/wallet";
 import { CollectorJob as DbCollectorJob } from "@/src/types/collector";
 import { NotificationItem as DbNotification } from "@/src/types/notification";
-import { Order as DbOrder, CreateOrderInput } from "@/src/types/order";
+import { CreateOrderInput, Order as DbOrder } from "@/src/types/order";
 import { ScheduledPickup as DbSchedule } from "@/src/types/schedule";
 
 export type BookingStep =
@@ -259,20 +259,27 @@ export const AppContextProvider: React.FC<{
   const { user } = useAuth();
 
   // Common states
-  const [userRole, setUserRoleState] = useState<"customer" | "collector">("customer");
+  const [userRole, setUserRoleState] = useState<"customer" | "collector">(
+    "customer",
+  );
 
   const setUserRole = useCallback((_role: "customer" | "collector") => {
     // Role changes must come from the authenticated Supabase profile.
   }, []);
 
-  const switchRole = useCallback(async (_role: "customer" | "collector") => {
-    setUserRoleState(user?.role === "collector" ? "collector" : "customer");
-  }, [user?.role]);
+  const switchRole = useCallback(
+    async (_role: "customer" | "collector") => {
+      setUserRoleState(user?.role === "collector" ? "collector" : "customer");
+    },
+    [user?.role],
+  );
 
   const [isOnboarded, setIsOnboardedState] = useState<boolean>(false);
   const setIsOnboarded = useCallback((val: boolean) => {
     setIsOnboardedState(val);
-    AsyncStorage.setItem("@ecolift_onboarded", val ? "true" : "false").catch(() => {});
+    AsyncStorage.setItem("@ecolift_onboarded", val ? "true" : "false").catch(
+      () => {},
+    );
   }, []);
 
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
@@ -307,7 +314,10 @@ export const AppContextProvider: React.FC<{
 
   const setIsCollectorVerified = useCallback((val: boolean) => {
     setIsCollectorVerifiedState(val);
-    AsyncStorage.setItem("@ecolift_collector_verified", val ? "true" : "false").catch(() => {});
+    AsyncStorage.setItem(
+      "@ecolift_collector_verified",
+      val ? "true" : "false",
+    ).catch(() => {});
   }, []);
 
   // Dark Mode
@@ -315,7 +325,9 @@ export const AppContextProvider: React.FC<{
   const toggleDarkMode = useCallback(() => {
     setIsDarkMode((prev) => {
       const next = !prev;
-      AsyncStorage.setItem("@ecolift_dark_mode", next ? "true" : "false").catch(() => {});
+      AsyncStorage.setItem("@ecolift_dark_mode", next ? "true" : "false").catch(
+        () => {},
+      );
       return next;
     });
   }, []);
@@ -324,48 +336,62 @@ export const AppContextProvider: React.FC<{
   const [ecoPoints, setEcoPointsState] = useState<number>(2450);
   const setEcoPoints = useCallback((points: number) => {
     setEcoPointsState(points);
-    AsyncStorage.setItem("@ecolift_eco_points", points.toString()).catch(() => {});
+    AsyncStorage.setItem("@ecolift_eco_points", points.toString()).catch(
+      () => {},
+    );
   }, []);
   const addEcoPoints = useCallback((points: number) => {
     setEcoPointsState((prev) => {
       const next = prev + points;
-      AsyncStorage.setItem("@ecolift_eco_points", next.toString()).catch(() => {});
+      AsyncStorage.setItem("@ecolift_eco_points", next.toString()).catch(
+        () => {},
+      );
       return next;
     });
   }, []);
 
   // Hydrate persisted state on mount
   useEffect(() => {
-    AsyncStorage.getItem("@ecolift_user_role").then((saved) => {
-      if (saved === "customer" || saved === "collector") {
-        setUserRoleState(saved);
-      }
-    }).catch(() => {});
+    AsyncStorage.getItem("@ecolift_user_role")
+      .then((saved) => {
+        if (saved === "customer" || saved === "collector") {
+          setUserRoleState(saved);
+        }
+      })
+      .catch(() => {});
 
-    AsyncStorage.getItem("@ecolift_collector_verified").then((saved) => {
-      if (saved !== null) {
-        setIsCollectorVerifiedState(saved === "true");
-      }
-    }).catch(() => {});
+    AsyncStorage.getItem("@ecolift_collector_verified")
+      .then((saved) => {
+        if (saved !== null) {
+          setIsCollectorVerifiedState(saved === "true");
+        }
+      })
+      .catch(() => {});
 
-    AsyncStorage.getItem("@ecolift_onboarded").then((saved) => {
-      if (saved !== null) {
-        setIsOnboardedState(saved === "true");
-      }
-    }).catch(() => {});
+    AsyncStorage.getItem("@ecolift_onboarded")
+      .then((saved) => {
+        if (saved !== null) {
+          setIsOnboardedState(saved === "true");
+        }
+      })
+      .catch(() => {});
 
-    AsyncStorage.getItem("@ecolift_dark_mode").then((saved) => {
-      if (saved !== null) {
-        setIsDarkMode(saved === "true");
-      }
-    }).catch(() => {});
+    AsyncStorage.getItem("@ecolift_dark_mode")
+      .then((saved) => {
+        if (saved !== null) {
+          setIsDarkMode(saved === "true");
+        }
+      })
+      .catch(() => {});
 
-    AsyncStorage.getItem("@ecolift_eco_points").then((saved) => {
-      if (saved !== null) {
-        const parsed = parseInt(saved, 10);
-        if (!isNaN(parsed)) setEcoPointsState(parsed);
-      }
-    }).catch(() => {});
+    AsyncStorage.getItem("@ecolift_eco_points")
+      .then((saved) => {
+        if (saved !== null) {
+          const parsed = parseInt(saved, 10);
+          if (!isNaN(parsed)) setEcoPointsState(parsed);
+        }
+      })
+      .catch(() => {});
   }, []);
   const [frontIdUploaded, setFrontIdUploaded] = useState<boolean>(false);
   const [backIdUploaded, setBackIdUploaded] = useState<boolean>(false);
@@ -497,7 +523,9 @@ export const AppContextProvider: React.FC<{
     setOrders((prev) => [order, ...prev]);
   };
 
-  const createPickupOrder = async (input: CreateOrderInput): Promise<DbOrder | null> => {
+  const createPickupOrder = async (
+    input: CreateOrderInput,
+  ): Promise<DbOrder | null> => {
     try {
       const dbOrder = await ordersService.createOrder(input);
       if (dbOrder) {

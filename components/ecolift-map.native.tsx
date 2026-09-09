@@ -13,6 +13,7 @@ export interface MapMarker {
   title?: string;
   type?: "user" | "collector" | "destination";
   draggable?: boolean;
+  isHighlighted?: boolean;
 }
 
 export interface EcoliftMapProps {
@@ -20,7 +21,10 @@ export interface EcoliftMapProps {
   routeCoordinates?: { latitude: number; longitude: number }[];
   style?: any;
   onMapPress?: (coords: { latitude: number; longitude: number }) => void;
-  onMarkerDragEnd?: (markerId: string, coords: { latitude: number; longitude: number }) => void;
+  onMarkerDragEnd?: (
+    markerId: string,
+    coords: { latitude: number; longitude: number },
+  ) => void;
   showUserLocation?: boolean;
 }
 
@@ -92,8 +96,12 @@ export const EcoliftMap: React.FC<EcoliftMapProps> = ({
   const fallbackLongitude = markers[0]?.longitude || -0.1974;
 
   const initialRegion = {
-    latitude: markers[0]?.latitude || (location ? location.coords.latitude : fallbackLatitude),
-    longitude: markers[0]?.longitude || (location ? location.coords.longitude : fallbackLongitude),
+    latitude:
+      markers[0]?.latitude ||
+      (location ? location.coords.latitude : fallbackLatitude),
+    longitude:
+      markers[0]?.longitude ||
+      (location ? location.coords.longitude : fallbackLongitude),
     latitudeDelta: 0.025,
     longitudeDelta: 0.025,
   };
@@ -142,6 +150,7 @@ export const EcoliftMap: React.FC<EcoliftMapProps> = ({
             <View
               style={[
                 styles.markerContainer,
+                marker.isHighlighted && styles.markerHighlighted,
                 marker.type === "collector"
                   ? { backgroundColor: C.primary }
                   : marker.type === "destination"
@@ -188,5 +197,8 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
+  markerHighlighted: {
+    transform: [{ scale: 1.25 }],
+    borderWidth: 3,
+  },
 });
-

@@ -5,35 +5,35 @@ import { useApp } from "@/context/AppContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
-  CheckCircle,
-  CheckCircle2,
-  Clock,
-  CreditCard,
-  DollarSign,
-  Layers,
-  Leaf,
-  MapPin,
-  Navigation,
-  PhoneCall,
-  Radio,
-  ShieldCheck,
-  Star,
-  TrendingUp,
-  Truck,
-  X,
-  Zap,
+    CheckCircle,
+    CheckCircle2,
+    Clock,
+    CreditCard,
+    DollarSign,
+    Layers,
+    Leaf,
+    MapPin,
+    Navigation,
+    PhoneCall,
+    Radio,
+    ShieldCheck,
+    Star,
+    TrendingUp,
+    Truck,
+    X,
+    Zap,
 } from "lucide-react-native";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  Animated,
-  Image,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TouchableOpacity,
-  View,
+    Animated,
+    Image,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
@@ -227,10 +227,7 @@ export default function CollectorHome() {
                 },
               ]}
             >
-              <Leaf
-                size={20}
-                color={isDarkMode ? "#6CF8BB" : "#006C49"}
-              />
+              <Leaf size={20} color={isDarkMode ? "#6CF8BB" : "#006C49"} />
             </View>
             <View>
               <View style={styles.brandTitleRow}>
@@ -462,10 +459,7 @@ export default function CollectorHome() {
                     },
                   ]}
                 >
-                  <Truck
-                    size={16}
-                    color={isDarkMode ? "#6CF8BB" : "#006C49"}
-                  />
+                  <Truck size={16} color={isDarkMode ? "#6CF8BB" : "#006C49"} />
                   <Text
                     style={[
                       styles.statValue,
@@ -730,10 +724,7 @@ export default function CollectorHome() {
                       ]}
                       onPress={handleDeclineJob}
                     >
-                      <X
-                        size={16}
-                        color={isDarkMode ? "#F9F9FF" : "#4A5568"}
-                      />
+                      <X size={16} color={isDarkMode ? "#F9F9FF" : "#4A5568"} />
                       <Text
                         style={[
                           styles.declineBtnText,
@@ -748,9 +739,7 @@ export default function CollectorHome() {
                       style={[
                         styles.acceptBtn,
                         {
-                          backgroundColor: isDarkMode
-                            ? "#6CF8BB"
-                            : "#006C49",
+                          backgroundColor: isDarkMode ? "#6CF8BB" : "#006C49",
                         },
                       ]}
                       onPress={handleAcceptJob}
@@ -841,9 +830,7 @@ export default function CollectorHome() {
                     style={[
                       styles.acceptBtn,
                       {
-                        backgroundColor: isDarkMode
-                          ? "#6CF8BB"
-                          : "#006C49",
+                        backgroundColor: isDarkMode ? "#6CF8BB" : "#006C49",
                         marginTop: 10,
                       },
                     ]}
@@ -938,9 +925,7 @@ export default function CollectorHome() {
                     style={[
                       styles.acceptBtn,
                       {
-                        backgroundColor: isDarkMode
-                          ? "#6CF8BB"
-                          : "#006C49",
+                        backgroundColor: isDarkMode ? "#6CF8BB" : "#006C49",
                         marginTop: 10,
                       },
                     ]}
@@ -977,10 +962,7 @@ export default function CollectorHome() {
                     },
                   ]}
                 >
-                  <Radio
-                    size={14}
-                    color={isOnline ? "#10B981" : "#6B7C77"}
-                  />
+                  <Radio size={14} color={isOnline ? "#10B981" : "#6B7C77"} />
                   <Text
                     style={[
                       styles.idlePillText,

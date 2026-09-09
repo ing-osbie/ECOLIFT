@@ -40,7 +40,9 @@ export async function geocodeAddress(
   regionBias?: string,
 ): Promise<GeocodeResult[]> {
   const encodedAddress = encodeURIComponent(address.trim());
-  const countryParam = regionBias ? `&countrycodes=${encodeURIComponent(regionBias)}` : "";
+  const countryParam = regionBias
+    ? `&countrycodes=${encodeURIComponent(regionBias)}`
+    : "";
   const url = `${NOMINATIM_URL}/search?format=jsonv2&addressdetails=1&limit=5&q=${encodedAddress}${countryParam}`;
 
   try {
@@ -96,7 +98,10 @@ export async function getPlaceDetails(
   try {
     const [prefix, latitude, longitude] = placeId.split(":");
     if (prefix !== "osm" || !latitude || !longitude) return null;
-    const address = await reverseGeocode({ latitude: Number(latitude), longitude: Number(longitude) });
+    const address = await reverseGeocode({
+      latitude: Number(latitude),
+      longitude: Number(longitude),
+    });
     if (address) {
       return {
         placeId,

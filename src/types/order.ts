@@ -25,6 +25,9 @@ export interface Order {
   pickup_lat?: number | null;
   pickup_lng?: number | null;
   pickup_address?: string | null;
+  disposal_lat?: number | null;
+  disposal_lng?: number | null;
+  disposal_address?: string | null;
   pickup_date?: string | null;
   bags_count: number;
   price: number;
@@ -43,6 +46,9 @@ export interface CreateOrderInput {
   pickup_lat?: number;
   pickup_lng?: number;
   pickup_address?: string;
+  disposal_lat?: number;
+  disposal_lng?: number;
+  disposal_address?: string;
   pickup_date?: string;
   bags_count?: number;
   vehicle_type_id?: string;

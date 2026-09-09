@@ -4,49 +4,53 @@ import { GlassCard } from "@/components/glass-card";
 import { GradientBackground } from "@/components/gradient-background";
 import { Colors, getColors } from "@/constants/theme";
 import { useApp } from "@/context/AppContext";
-import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import Svg, { Path } from "react-native-svg";
+import { useRouter } from "expo-router";
 import {
-  Bell,
-  Calendar as CalendarIcon,
-  CalendarPlus,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  CreditCard,
-  Leaf,
-  Lightbulb,
-  MapPin,
-  MessageSquare,
-  Package,
-  PhoneCall,
-  Recycle,
-  Search,
-  Truck,
-  X,
+    Bell,
+    Calendar as CalendarIcon,
+    CalendarPlus,
+    CheckCircle2,
+    ChevronLeft,
+    ChevronRight,
+    CreditCard,
+    Leaf,
+    Lightbulb,
+    MapPin,
+    MessageSquare,
+    Package,
+    PhoneCall,
+    Recycle,
+    Search,
+    Truck,
+    X,
 } from "lucide-react-native";
 import React, { useState } from "react";
 import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    FlatList,
+    Image,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Svg, { Path } from "react-native-svg";
 
-import { geocodeAddress, getPlaceDetails, reverseGeocode } from "@/src/services/googleMaps";
+import { useAuth } from "@/src/context/AuthContext";
+import {
+    geocodeAddress,
+    getPlaceDetails,
+    reverseGeocode,
+} from "@/src/services/googleMaps";
 import { getNotifications } from "@/src/services/notifications";
 import { subscribeToOrderById } from "@/src/services/orders";
 import { Order as DbOrder } from "@/src/types/order";
-import { useAuth } from "@/src/context/AuthContext";
 
 interface LocationResult {
   id: string;
@@ -54,6 +58,8 @@ interface LocationResult {
   area: string;
   coords: { latitude: number; longitude: number };
 }
+
+type Coordinates = { latitude: number; longitude: number };
 
 const DEFAULT_LOCATIONS: LocationResult[] = [
   {
@@ -170,7 +176,11 @@ export default function UserHome() {
 
   // Screen View States: 'home' | 'choose_vehicle' | 'confirm_pickup' | 'tracking'
   const [viewState, setViewState] = useState<
-    "home" | "choose_vehicle" | "confirm_pickup" | "tracking"
+    | "home"
+    | "choose_vehicle"
+    | "confirm_pickup"
+    | "editing_location"
+    | "tracking"
   >("home");
   const [activeOrder, setActiveOrder] = useState<DbOrder | null>(null);
   const [selectedVehicle, setSelectedVehicle] = useState<
@@ -184,30 +194,42 @@ export default function UserHome() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] =
     useState<LocationResult[]>(DEFAULT_LOCATIONS);
-  const [userCoords, setUserCoords] = useState({
+  const [pickupLocation, setPickupLocation] = useState<Coordinates>({
     latitude: 5.5593,
     longitude: -0.1974,
   });
 
   // Disposal station state
-  const [disposalStation, setDisposalStation] = useState(
+  const [disposalAddress, setDisposalAddress] = useState(
     DEFAULT_DISPOSAL_STATIONS[0].name,
   );
-  const [destinationCoords, setDestinationCoords] = useState({
+  const [disposalLocation, setDisposalLocation] = useState<Coordinates>({
     latitude: 5.57,
     longitude: -0.185,
   });
 
+  const [editingLocation, setEditingLocation] = useState<
+    "pickup" | "disposal" | null
+  >(null);
+  const [editingPickupLocation, setEditingPickupLocation] =
+    useState<Coordinates | null>(null);
+  const [editingPickupAddress, setEditingPickupAddress] = useState("");
+  const [editingDisposalLocation, setEditingDisposalLocation] =
+    useState<Coordinates | null>(null);
+  const [editingDisposalAddress, setEditingDisposalAddress] = useState("");
+
   // Map Picking Active mode: "pickup" | "destination" | null
-  const [isMapPickingActive, setIsMapPickingActive] = useState<"pickup" | "destination" | null>(null);
+  const [isMapPickingActive, setIsMapPickingActive] = useState<
+    "pickup" | "destination" | null
+  >(null);
 
   const hasAssignedCollector = Boolean(
     activeOrder?.collector_id &&
-      (activeOrder.status === "confirmed" || activeOrder.status === "en_route"),
+    (activeOrder.status === "confirmed" || activeOrder.status === "en_route"),
   );
   const collectorCoords = {
-    latitude: userCoords.latitude + 0.004,
-    longitude: userCoords.longitude + 0.004,
+    latitude: pickupLocation.latitude + 0.004,
+    longitude: pickupLocation.longitude + 0.004,
   };
 
   React.useEffect(() => {
@@ -222,29 +244,45 @@ export default function UserHome() {
   const mapMarkers = [
     {
       id: "user",
-      latitude: userCoords.latitude,
-      longitude: userCoords.longitude,
+      latitude:
+        editingLocation === "pickup" && editingPickupLocation
+          ? editingPickupLocation.latitude
+          : pickupLocation.latitude,
+      longitude:
+        editingLocation === "pickup" && editingPickupLocation
+          ? editingPickupLocation.longitude
+          : pickupLocation.longitude,
       title: `Pickup: ${pickupAddress}`,
       type: "user" as const,
       draggable: true,
+      isHighlighted: editingLocation === "pickup",
     },
     ...(hasAssignedCollector
-      ? [{
-          id: "collector",
-          latitude: collectorCoords.latitude,
-          longitude: collectorCoords.longitude,
-          title: "Assigned EcoLift collector",
-          type: "collector" as const,
-          draggable: false,
-        }]
+      ? [
+          {
+            id: "collector",
+            latitude: collectorCoords.latitude,
+            longitude: collectorCoords.longitude,
+            title: "Assigned EcoLift collector",
+            type: "collector" as const,
+            draggable: false,
+          },
+        ]
       : []),
     {
       id: "station",
-      latitude: destinationCoords.latitude,
-      longitude: destinationCoords.longitude,
-      title: `Destination: ${disposalStation}`,
+      latitude:
+        editingLocation === "disposal" && editingDisposalLocation
+          ? editingDisposalLocation.latitude
+          : disposalLocation.latitude,
+      longitude:
+        editingLocation === "disposal" && editingDisposalLocation
+          ? editingDisposalLocation.longitude
+          : disposalLocation.longitude,
+      title: `Destination: ${disposalAddress}`,
       type: "destination" as const,
       draggable: true,
+      isHighlighted: editingLocation === "disposal",
     },
   ];
 
@@ -254,28 +292,79 @@ export default function UserHome() {
       ? [
           collectorCoords,
           {
-            latitude: (userCoords.latitude + collectorCoords.latitude) / 2 + 0.001,
-            longitude: (userCoords.longitude + collectorCoords.longitude) / 2 - 0.001,
+            latitude:
+              (pickupLocation.latitude + collectorCoords.latitude) / 2 + 0.001,
+            longitude:
+              (pickupLocation.longitude + collectorCoords.longitude) / 2 -
+              0.001,
           },
         ]
       : []),
     {
-      latitude: (userCoords.latitude + destinationCoords.latitude) / 2 + 0.002,
-      longitude: (userCoords.longitude + destinationCoords.longitude) / 2 + 0.002,
+      latitude:
+        (pickupLocation.latitude + disposalLocation.latitude) / 2 + 0.002,
+      longitude:
+        (pickupLocation.longitude + disposalLocation.longitude) / 2 + 0.002,
     },
-    userCoords,
-    destinationCoords,
+    pickupLocation,
+    disposalLocation,
   ];
 
+  const activePickupLocation =
+    editingLocation === "pickup" && editingPickupLocation
+      ? editingPickupLocation
+      : pickupLocation;
+  const activeDisposalLocation =
+    editingLocation === "disposal" && editingDisposalLocation
+      ? editingDisposalLocation
+      : disposalLocation;
+  const routeDistanceKm = Math.max(
+    0.1,
+    Math.sqrt(
+      Math.pow(
+        (activePickupLocation.latitude - activeDisposalLocation.latitude) * 111,
+        2,
+      ) +
+        Math.pow(
+          (activePickupLocation.longitude - activeDisposalLocation.longitude) *
+            111 *
+            Math.cos((activePickupLocation.latitude * Math.PI) / 180),
+          2,
+        ),
+    ),
+  );
+  const estimatedMinutes = Math.max(5, Math.round(routeDistanceKm * 3));
+  const vehicleBasePrice = { tricycle: 25, truck: 45, heavy: 85 }[
+    selectedVehicle
+  ];
+  const pickupPrice =
+    vehicleBasePrice + Math.max(0, Math.round(routeDistanceKm - 3) * 2);
+
   // Map Tap Handler - pick any location around the world directly from map
-  const handleMapPress = async (coords: { latitude: number; longitude: number }) => {
+  const handleMapPress = async (coords: {
+    latitude: number;
+    longitude: number;
+  }) => {
     try {
       const address = await reverseGeocode(coords);
-      const displayAddress = address || `Lat: ${coords.latitude.toFixed(4)}, Lng: ${coords.longitude.toFixed(4)}`;
+      const displayAddress =
+        address ||
+        `Lat: ${coords.latitude.toFixed(4)}, Lng: ${coords.longitude.toFixed(4)}`;
+
+      if (editingLocation === "pickup") {
+        setEditingPickupLocation(coords);
+        setEditingPickupAddress(displayAddress);
+        return;
+      }
+      if (editingLocation === "disposal") {
+        setEditingDisposalLocation(coords);
+        setEditingDisposalAddress(displayAddress);
+        return;
+      }
 
       if (isMapPickingActive === "destination") {
-        setDestinationCoords(coords);
-        setDisposalStation(displayAddress);
+        setDisposalLocation(coords);
+        setDisposalAddress(displayAddress);
         setIsMapPickingActive(null);
         showAlert({
           type: "success",
@@ -283,7 +372,7 @@ export default function UserHome() {
           message: `Disposal destination set to: ${displayAddress}`,
         });
       } else {
-        setUserCoords(coords);
+        setPickupLocation(coords);
         setPickupAddress(displayAddress);
         setIsMapPickingActive(null);
         showAlert({
@@ -298,21 +387,40 @@ export default function UserHome() {
   };
 
   // Marker Drag End Handler - pick/adjust location worldwide by dragging pins
-  const handleMarkerDragEnd = async (markerId: string, coords: { latitude: number; longitude: number }) => {
+  const handleMarkerDragEnd = async (
+    markerId: string,
+    coords: { latitude: number; longitude: number },
+  ) => {
     try {
       const address = await reverseGeocode(coords);
-      const displayAddress = address || `Lat: ${coords.latitude.toFixed(4)}, Lng: ${coords.longitude.toFixed(4)}`;
+      const displayAddress =
+        address ||
+        `Lat: ${coords.latitude.toFixed(4)}, Lng: ${coords.longitude.toFixed(4)}`;
+
+      if (editingLocation === "pickup" && markerId === "user") {
+        setEditingPickupLocation(coords);
+        setEditingPickupAddress(displayAddress);
+        return;
+      }
+      if (
+        editingLocation === "disposal" &&
+        (markerId === "station" || markerId === "destination")
+      ) {
+        setEditingDisposalLocation(coords);
+        setEditingDisposalAddress(displayAddress);
+        return;
+      }
 
       if (markerId === "station" || markerId === "destination") {
-        setDestinationCoords(coords);
-        setDisposalStation(displayAddress);
+        setDisposalLocation(coords);
+        setDisposalAddress(displayAddress);
         showAlert({
           type: "success",
           title: "Destination Pin Moved",
           message: `Disposal destination updated to: ${displayAddress}`,
         });
       } else if (markerId === "user") {
-        setUserCoords(coords);
+        setPickupLocation(coords);
         setPickupAddress(displayAddress);
         showAlert({
           type: "success",
@@ -330,7 +438,7 @@ export default function UserHome() {
     try {
       const place = await getPlaceDetails(placeId);
       if (place) {
-        setUserCoords(place.location);
+        setPickupLocation(place.location);
         setPickupAddress(place.formattedAddress || place.name);
         setIsSearchOpen(false);
         setSearchQuery("");
@@ -389,7 +497,7 @@ export default function UserHome() {
       fetchPlaceDetailsById(loc.id);
     } else {
       setPickupAddress(loc.area || loc.name);
-      setUserCoords(loc.coords);
+      setPickupLocation(loc.coords);
       setIsSearchOpen(false);
       setSearchQuery("");
       searchInputRef.current?.blur();
@@ -400,8 +508,9 @@ export default function UserHome() {
   // Disposal station search & edit states
   const [isDisposalModalVisible, setIsDisposalModalVisible] = useState(false);
   const [disposalSearchQuery, setDisposalSearchQuery] = useState("");
-  const [disposalResults, setDisposalResults] =
-    useState<LocationResult[]>(DEFAULT_DISPOSAL_STATIONS);
+  const [disposalResults, setDisposalResults] = useState<LocationResult[]>(
+    DEFAULT_DISPOSAL_STATIONS,
+  );
   const [isDisposalSearching, setIsDisposalSearching] = useState(false);
 
   const handleDisposalSearch = async (text: string) => {
@@ -438,8 +547,14 @@ export default function UserHome() {
   };
 
   const handleDisposalSelect = (loc: LocationResult) => {
-    setDisposalStation(loc.area ? `${loc.name}, ${loc.area}` : loc.name);
-    setDestinationCoords(loc.coords);
+    const address = loc.area ? `${loc.name}, ${loc.area}` : loc.name;
+    if (editingLocation === "disposal") {
+      setEditingDisposalAddress(address);
+      setEditingDisposalLocation(loc.coords);
+    } else {
+      setDisposalAddress(address);
+      setDisposalLocation(loc.coords);
+    }
     setIsDisposalModalVisible(false);
     setDisposalSearchQuery("");
     setDisposalResults(DEFAULT_DISPOSAL_STATIONS);
@@ -493,8 +608,14 @@ export default function UserHome() {
   };
 
   const handlePickupEditSelect = (loc: LocationResult) => {
-    setPickupAddress(loc.area || loc.name);
-    setUserCoords(loc.coords);
+    const address = loc.area || loc.name;
+    if (editingLocation === "pickup") {
+      setEditingPickupAddress(address);
+      setEditingPickupLocation(loc.coords);
+    } else {
+      setPickupAddress(address);
+      setPickupLocation(loc.coords);
+    }
     setIsPickupEditModalVisible(false);
     setPickupEditQuery("");
     setPickupEditResults(DEFAULT_LOCATIONS);
@@ -505,13 +626,124 @@ export default function UserHome() {
     });
   };
 
+  const applyTypedPickupAddress = async () => {
+    const query = pickupEditQuery.trim();
+    if (!query || isPickupEditSearching) return;
+
+    setIsPickupEditSearching(true);
+    try {
+      const [result] = await geocodeAddress(query);
+      if (!result) {
+        showAlert({
+          type: "error",
+          title: "Location Not Found",
+          message: "Try a more specific pickup address or choose a map result.",
+        });
+        return;
+      }
+      const address = result.formattedAddress || result.name || query;
+      setEditingPickupLocation(result.location);
+      setEditingPickupAddress(address);
+      setIsPickupEditModalVisible(false);
+      setPickupEditQuery("");
+      setPickupEditResults(DEFAULT_LOCATIONS);
+    } catch {
+      showAlert({
+        type: "error",
+        title: "Location Search Failed",
+        message: "Check your connection and try the address again.",
+      });
+    } finally {
+      setIsPickupEditSearching(false);
+    }
+  };
+
+  const applyTypedDisposalAddress = async () => {
+    const query = disposalSearchQuery.trim();
+    if (!query || isDisposalSearching) return;
+
+    setIsDisposalSearching(true);
+    try {
+      const [result] = await geocodeAddress(query);
+      if (!result) {
+        showAlert({
+          type: "error",
+          title: "Location Not Found",
+          message:
+            "Try a more specific disposal station or choose a map result.",
+        });
+        return;
+      }
+      const address = result.formattedAddress || result.name || query;
+      setEditingDisposalLocation(result.location);
+      setEditingDisposalAddress(address);
+      setIsDisposalModalVisible(false);
+      setDisposalSearchQuery("");
+      setDisposalResults(DEFAULT_DISPOSAL_STATIONS);
+    } catch {
+      showAlert({
+        type: "error",
+        title: "Location Search Failed",
+        message: "Check your connection and try the address again.",
+      });
+    } finally {
+      setIsDisposalSearching(false);
+    }
+  };
+
+  const beginLocationEditing = (mode: "pickup" | "disposal") => {
+    setEditingLocation(mode);
+    setEditingPickupLocation(pickupLocation);
+    setEditingPickupAddress(pickupAddress);
+    setEditingDisposalLocation(disposalLocation);
+    setEditingDisposalAddress(disposalAddress);
+    setIsMapPickingActive(null);
+    setViewState("editing_location");
+  };
+
+  const cancelLocationEditing = () => {
+    setEditingLocation(null);
+    setEditingPickupLocation(null);
+    setEditingDisposalLocation(null);
+    setViewState("confirm_pickup");
+  };
+
+  const confirmLocationEditing = () => {
+    if (editingLocation === "pickup" && editingPickupLocation) {
+      setPickupLocation(editingPickupLocation);
+      setPickupAddress(editingPickupAddress);
+    }
+    if (editingLocation === "disposal" && editingDisposalLocation) {
+      setDisposalLocation(editingDisposalLocation);
+      setDisposalAddress(editingDisposalAddress);
+    }
+    setEditingLocation(null);
+    setEditingPickupLocation(null);
+    setEditingDisposalLocation(null);
+    setViewState("confirm_pickup");
+  };
+
   const handleConfirmPickup = async () => {
+    if (
+      !Number.isFinite(pickupLocation.latitude) ||
+      !Number.isFinite(pickupLocation.longitude) ||
+      !Number.isFinite(disposalLocation.latitude) ||
+      !Number.isFinite(disposalLocation.longitude)
+    ) {
+      showAlert({
+        type: "error",
+        title: "Locations Required",
+        message:
+          "Please select both a pickup location and a disposal station before continuing.",
+      });
+      return;
+    }
     // Create order in Supabase backend
     const wasteTypeMap: Record<string, string> = {
-      'Household': 'household',
-      'Recyclables': 'recyclables',
-      'Commercial': 'commercial',
-      'Bulk / Construction': 'bulk_construction',
+      Household: "household",
+      Recyclables: "recyclables",
+      Commercial: "commercial",
+      "Bulk / Construction": "bulk_construction",
     };
     const vehiclePriceMap: Record<string, number> = {
       tricycle: 25,
@@ -520,11 +752,20 @@ export default function UserHome() {
     };
     try {
       const createdOrder = await createPickupOrder({
-        waste_type: (wasteTypeMap[selectedWasteType] || 'household') as any,
+        waste_type: (wasteTypeMap[selectedWasteType] || "household") as any,
+        pickup_lat: pickupLocation.latitude,
+        pickup_lng: pickupLocation.longitude,
         pickup_address: pickupAddress,
+        disposal_lat: disposalLocation.latitude,
+        disposal_lng: disposalLocation.longitude,
+        disposal_address: disposalAddress,
         bags_count: bagsCount,
-        price: vehiclePriceMap[selectedVehicle] || 45,
-        payment_method: (selectedPaymentMethod === 'moolre_momo' ? 'momo' : selectedPaymentMethod === 'card' ? 'card' : 'wallet') as any,
+        price: pickupPrice || vehiclePriceMap[selectedVehicle] || 45,
+        payment_method: (selectedPaymentMethod === "moolre_momo"
+          ? "momo"
+          : selectedPaymentMethod === "card"
+            ? "card"
+            : "wallet") as any,
       });
 
       if (!createdOrder) {
@@ -538,7 +779,7 @@ export default function UserHome() {
 
       setActiveOrder(createdOrder);
     } catch (err) {
-      console.warn('Order creation error:', err);
+      console.warn("Order creation error:", err);
       showAlert({
         type: "error",
         title: "Pickup Request Not Created",
@@ -623,7 +864,9 @@ export default function UserHome() {
               >
                 <Image
                   source={{
-                    uri: user?.avatar_url || "https://lh3.googleusercontent.com/aida/AP1WRLvvebFOZ6ynMsVwLT_RhMB47PIf8hxioUnplUngiLRck_uwziGuo8q9YO5aj1foVEUmhejlyafL2z2OHqEPi7FC8azbJoc-ziJbt6qsF5SMnw3GGseHcRNMOLhOvVO7v71vEGCzSy99We7_7rFyQI5Xzz2j4GcrsBMMWBjTRHPbwqUwGF-tolAZtlI0fp2FGa_-ATEKQMsHpKcZA_Q1cKK8GQq6hUUor6q0TpvsuD-ZBS35WmtkQvEqKtrn1A2MHmfBS2lh9XHmQQ",
+                    uri:
+                      user?.avatar_url ||
+                      "https://lh3.googleusercontent.com/aida/AP1WRLvvebFOZ6ynMsVwLT_RhMB47PIf8hxioUnplUngiLRck_uwziGuo8q9YO5aj1foVEUmhejlyafL2z2OHqEPi7FC8azbJoc-ziJbt6qsF5SMnw3GGseHcRNMOLhOvVO7v71vEGCzSy99We7_7rFyQI5Xzz2j4GcrsBMMWBjTRHPbwqUwGF-tolAZtlI0fp2FGa_-ATEKQMsHpKcZA_Q1cKK8GQq6hUUor6q0TpvsuD-ZBS35WmtkQvEqKtrn1A2MHmfBS2lh9XHmQQ",
                   }}
                   style={styles.avatarImage}
                 />
@@ -731,10 +974,7 @@ export default function UserHome() {
                       onPress={() => handleSearchTextChange("")}
                     >
                       <Text
-                        style={[
-                          styles.floatingClearText,
-                          { color: "#006C49" },
-                        ]}
+                        style={[styles.floatingClearText, { color: "#006C49" }]}
                       >
                         Clear
                       </Text>
@@ -754,9 +994,7 @@ export default function UserHome() {
                       style={[
                         styles.locationResultRow,
                         {
-                          borderBottomColor: isDarkMode
-                            ? "#262D2A"
-                            : C.border,
+                          borderBottomColor: isDarkMode ? "#262D2A" : C.border,
                         },
                       ]}
                       onPress={() => handleSelectLocation(item)}
@@ -795,10 +1033,7 @@ export default function UserHome() {
                   {searchResults.length === 0 && !isSearching && (
                     <View style={styles.emptyResultsContainer}>
                       <Text
-                        style={[
-                          styles.emptyResultsText,
-                          { color: C.greyText },
-                        ]}
+                        style={[styles.emptyResultsText, { color: C.greyText }]}
                       >
                         No locations found for &quot;{searchQuery}&quot;
                       </Text>
@@ -885,9 +1120,7 @@ export default function UserHome() {
                   <Path
                     d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                     fill="none"
-                    stroke={
-                      isDarkMode ? "rgba(255,255,255,0.08)" : "#DCE2F3"
-                    }
+                    stroke={isDarkMode ? "rgba(255,255,255,0.08)" : "#DCE2F3"}
                     strokeWidth={3.2}
                   />
                   <Path
@@ -1582,7 +1815,10 @@ export default function UserHome() {
                     {/* Editable Pickup Location */}
                     <TouchableOpacity
                       style={styles.locationItemRow}
-                      onPress={() => setIsPickupEditModalVisible(true)}
+                      onPress={() => {
+                        beginLocationEditing("pickup");
+                        setIsPickupEditModalVisible(true);
+                      }}
                       activeOpacity={0.8}
                     >
                       <View
@@ -1634,7 +1870,10 @@ export default function UserHome() {
                     {/* Editable Disposal Station */}
                     <TouchableOpacity
                       style={styles.locationItemRow}
-                      onPress={() => setIsDisposalModalVisible(true)}
+                      onPress={() => {
+                        beginLocationEditing("disposal");
+                        setIsDisposalModalVisible(true);
+                      }}
                       activeOpacity={0.8}
                     >
                       <View
@@ -1653,7 +1892,7 @@ export default function UserHome() {
                           style={[styles.locAddress, { color: C.text }]}
                           numberOfLines={1}
                         >
-                          {disposalStation}
+                          {disposalAddress}
                         </Text>
                       </View>
                       <View
@@ -1708,14 +1947,14 @@ export default function UserHome() {
                             { color: C.greyText },
                           ]}
                         >
-                          7 min away · Up to 500 kg
+                          {estimatedMinutes} min away · Up to 500 kg
                         </Text>
                       </View>
                     </View>
                     <Text
                       style={[styles.summaryVehiclePrice, { color: C.text }]}
                     >
-                      GH₵ 45.00
+                      GH₵ {pickupPrice.toFixed(2)}
                     </Text>
                   </View>
 
@@ -1767,6 +2006,126 @@ export default function UserHome() {
               </View>
             )}
 
+            {/* SUB-VIEW: LOCATION EDITOR */}
+            {viewState === "editing_location" && (
+              <View style={styles.fullScreenMapContainer}>
+                <EcoliftMap
+                  markers={mapMarkers}
+                  routeCoordinates={routePolyline}
+                  onMapPress={handleMapPress}
+                  onMarkerDragEnd={handleMarkerDragEnd}
+                  style={styles.fullMap}
+                />
+
+                <SafeAreaView style={styles.mapTopHeader}>
+                  <View style={styles.mapTopHeaderRow}>
+                    <TouchableOpacity
+                      onPress={cancelLocationEditing}
+                      style={[
+                        styles.mapBackButton,
+                        { backgroundColor: isDarkMode ? "#1E2321" : "#FFFFFF" },
+                      ]}
+                    >
+                      <X size={20} color={C.text} />
+                    </TouchableOpacity>
+                    <View
+                      style={[
+                        styles.mapPickingBanner,
+                        {
+                          backgroundColor: isDarkMode
+                            ? "rgba(26, 31, 29, 0.95)"
+                            : "rgba(255, 255, 255, 0.95)",
+                          borderColor:
+                            editingLocation === "pickup"
+                              ? "#EF4444"
+                              : "#10B981",
+                        },
+                      ]}
+                    >
+                      {editingLocation === "pickup" ? (
+                        <MapPin size={15} color="#EF4444" />
+                      ) : (
+                        <Recycle size={15} color="#10B981" />
+                      )}
+                      <Text style={[styles.mapPickingText, { color: C.text }]}>
+                        Tap the map to move{" "}
+                        {editingLocation === "pickup" ? "pickup" : "disposal"}
+                      </Text>
+                    </View>
+                  </View>
+                </SafeAreaView>
+
+                <View
+                  style={[
+                    styles.bottomSheet,
+                    { backgroundColor: isDarkMode ? "#141716" : "#FFFFFF" },
+                  ]}
+                >
+                  <TouchableOpacity
+                    style={styles.sheetHandleTouchArea}
+                    onPress={cancelLocationEditing}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.sheetHandle} />
+                  </TouchableOpacity>
+                  <Text style={[styles.sheetHeaderTitle, { color: C.text }]}>
+                    Edit{" "}
+                    {editingLocation === "pickup"
+                      ? "Pickup Location"
+                      : "Disposal / Eco-Station"}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.locAddress,
+                      { color: C.text, marginBottom: 14 },
+                    ]}
+                    numberOfLines={2}
+                  >
+                    {editingLocation === "pickup"
+                      ? editingPickupAddress
+                      : editingDisposalAddress}
+                  </Text>
+                  <View style={styles.trackingActionRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.confirmPrimaryBtn,
+                        {
+                          flex: 1,
+                          backgroundColor: isDarkMode
+                            ? Colors.accent
+                            : Colors.primary,
+                        },
+                      ]}
+                      onPress={confirmLocationEditing}
+                      disabled={
+                        editingLocation === "pickup"
+                          ? !editingPickupLocation
+                          : !editingDisposalLocation
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.confirmBtnText,
+                          { color: isDarkMode ? "#000000" : "#FFFFFF" },
+                        ]}
+                      >
+                        Confirm Location
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.mapBackButton,
+                        { backgroundColor: isDarkMode ? "#242A28" : "#F0F4F2" },
+                      ]}
+                      onPress={cancelLocationEditing}
+                    >
+                      <X size={20} color={C.text} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            )}
+
             {/* SUB-VIEW: HIGH-END LIVE MAP TRACKING */}
             {viewState === "tracking" && (
               <View style={styles.fullScreenMapContainer}>
@@ -1786,23 +2145,44 @@ export default function UserHome() {
                     ]}
                   >
                     <ActivityIndicator size="large" color={C.primary} />
-                    <Text style={[styles.searchingCollectorTitle, { color: C.text }]}>
+                    <Text
+                      style={[
+                        styles.searchingCollectorTitle,
+                        { color: C.text },
+                      ]}
+                    >
                       Finding a collector...
                     </Text>
-                    <Text style={[styles.searchingCollectorSubtitle, { color: C.greyText }]}>
-                      Your pickup request is being shared with available EcoLift collectors.
+                    <Text
+                      style={[
+                        styles.searchingCollectorSubtitle,
+                        { color: C.greyText },
+                      ]}
+                    >
+                      Your pickup request is being shared with available EcoLift
+                      collectors.
                     </Text>
                     <TouchableOpacity
                       style={styles.searchingBackButton}
                       onPress={() => setViewState("home")}
                     >
-                      <Text style={[styles.searchingBackButtonText, { color: C.primary }]}>Back Home</Text>
+                      <Text
+                        style={[
+                          styles.searchingBackButtonText,
+                          { color: C.primary },
+                        ]}
+                      >
+                        Back Home
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 )}
 
                 <SafeAreaView
-                  style={[styles.trackingTopHeader, !hasAssignedCollector && styles.hiddenTrackingPanel]}
+                  style={[
+                    styles.trackingTopHeader,
+                    !hasAssignedCollector && styles.hiddenTrackingPanel,
+                  ]}
                 >
                   <View
                     style={[
@@ -1824,7 +2204,7 @@ export default function UserHome() {
 
                     <View style={styles.driverInfoMeta}>
                       <View style={styles.driverAvatarCircle}>
-                          <Text style={styles.driverAvatarText}>EC</Text>
+                        <Text style={styles.driverAvatarText}>EC</Text>
                       </View>
                       <View>
                         <Text
@@ -2053,7 +2433,8 @@ export default function UserHome() {
                   showAlert({
                     type: "info",
                     title: "Tap Map to Place Pickup",
-                    message: "Tap anywhere on the world map to drop your pickup location pin.",
+                    message:
+                      "Tap anywhere on the world map to drop your pickup location pin.",
                   });
                 }}
                 activeOpacity={0.8}
@@ -2061,6 +2442,19 @@ export default function UserHome() {
                 <MapPin size={16} color="#EF4444" />
                 <Text style={[styles.pickOnMapModalBtnText, { color: C.text }]}>
                   📍 Or tap anywhere on the map to set pin
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.useTypedLocationBtn, { borderColor: C.border }]}
+                onPress={applyTypedPickupAddress}
+                disabled={!pickupEditQuery.trim() || isPickupEditSearching}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[styles.useTypedLocationText, { color: C.primary }]}
+                >
+                  Use typed pickup address
                 </Text>
               </TouchableOpacity>
 
@@ -2166,7 +2560,8 @@ export default function UserHome() {
                   showAlert({
                     type: "info",
                     title: "Tap Map to Place Destination",
-                    message: "Tap anywhere on the world map to drop your disposal station pin.",
+                    message:
+                      "Tap anywhere on the world map to drop your disposal station pin.",
                   });
                 }}
                 activeOpacity={0.8}
@@ -2174,6 +2569,19 @@ export default function UserHome() {
                 <Recycle size={16} color="#10B981" />
                 <Text style={[styles.pickOnMapModalBtnText, { color: C.text }]}>
                   ♻️ Or tap anywhere on the map to set destination
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.useTypedLocationBtn, { borderColor: C.border }]}
+                onPress={applyTypedDisposalAddress}
+                disabled={!disposalSearchQuery.trim() || isDisposalSearching}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[styles.useTypedLocationText, { color: C.primary }]}
+                >
+                  Use typed disposal address
                 </Text>
               </TouchableOpacity>
 
@@ -2208,7 +2616,7 @@ export default function UserHome() {
                         {item.area}
                       </Text>
                     </View>
-                    {disposalStation.includes(item.name) && (
+                    {disposalAddress.includes(item.name) && (
                       <View
                         style={[
                           styles.activeCheckBadge,
@@ -3220,6 +3628,18 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   pickOnMapModalBtnText: {
+    fontSize: 12,
+    fontFamily: "Poppins-Bold",
+  },
+  useTypedLocationBtn: {
+    minHeight: 42,
+    borderWidth: 1,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  useTypedLocationText: {
     fontSize: 12,
     fontFamily: "Poppins-Bold",
   },

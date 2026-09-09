@@ -1,9 +1,9 @@
 import { supabase } from "@/src/lib/supabase";
 import { UserRole } from "@/src/types/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { Platform } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const REDIRECT_URL = "ecoliftapp://auth/callback";
 console.log("GOOGLE REDIRECT URL:", REDIRECT_URL);
@@ -57,7 +57,9 @@ export async function signIn(email: string, password: string) {
   return data;
 }
 
-export async function getEmailForFullName(fullName: string): Promise<string | null> {
+export async function getEmailForFullName(
+  fullName: string,
+): Promise<string | null> {
   const { data, error } = await supabase.rpc("get_login_email_by_name", {
     p_full_name: fullName.trim(),
   });
@@ -141,9 +143,7 @@ export async function signInWithGoogle(
   // Google OAuth does not carry our app's selected role.
   // Restore the role saved before opening Google and create the
   // correct profile through the secure Supabase RPC.
-  const signupRole = await AsyncStorage.getItem(
-    "ecolift_google_signup_role",
-  );
+  const signupRole = await AsyncStorage.getItem("ecolift_google_signup_role");
 
   if (signupRole === "customer" || signupRole === "collector") {
     const { error: profileError } = await supabase.rpc(

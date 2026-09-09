@@ -13,7 +13,10 @@ export async function getProfile(userId?: string): Promise<Profile | null> {
     .maybeSingle(); // won't crash if 0 rows
 
   if (error) {
-    if (!error.message.includes("schema cache") && !error.message.includes("JWT issued at future")) {
+    if (
+      !error.message.includes("schema cache") &&
+      !error.message.includes("JWT issued at future")
+    ) {
       console.error("Error loading profile:", error.message);
     }
     return null;
@@ -51,7 +54,6 @@ export async function getProfile(userId?: string): Promise<Profile | null> {
   return data as Profile;
 }
 
-
 export async function updateProfile(
   updates: Partial<Pick<Profile, "full_name" | "phone" | "avatar_url">>,
 ): Promise<Profile | null> {
@@ -79,13 +81,13 @@ export async function uploadAvatar(
 
   const ext = mimeType.split("/")[1] || "jpg";
   const filePath = `${userId}/avatar.${ext}`;
-    const response = await fetch(fileUri);
-    if (!response.ok) throw new Error("Unable to read the selected image.");
-    const file = await response.blob();
+  const response = await fetch(fileUri);
+  if (!response.ok) throw new Error("Unable to read the selected image.");
+  const file = await response.blob();
 
   const { error: uploadError } = await supabase.storage
     .from("avatars")
-      .upload(filePath, file, {
+    .upload(filePath, file, {
       upsert: true,
       contentType: mimeType,
     });

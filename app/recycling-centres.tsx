@@ -12,7 +12,7 @@ import {
   Phone,
   Recycle,
 } from "lucide-react-native";
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Linking,
   Platform,
@@ -145,7 +145,10 @@ export default function RecyclingCentresScreen() {
             onPress={() => router.back()}
             style={[
               styles.backBtn,
-              { backgroundColor: isDarkMode ? "#1E2321" : "#FFFFFF", borderColor: C.border },
+              {
+                backgroundColor: isDarkMode ? "#1E2321" : "#FFFFFF",
+                borderColor: C.border,
+              },
             ]}
           >
             <ArrowLeft size={20} color={C.text} />
@@ -171,7 +174,9 @@ export default function RecyclingCentresScreen() {
                 style={[
                   styles.toggleBtn,
                   viewMode === mode && {
-                    backgroundColor: isDarkMode ? Colors.accent : Colors.primary,
+                    backgroundColor: isDarkMode
+                      ? Colors.accent
+                      : Colors.primary,
                   },
                 ]}
                 onPress={() => setViewMode(mode)}
@@ -282,9 +287,7 @@ export default function RecyclingCentresScreen() {
                     >
                       <Recycle
                         size={20}
-                        color={
-                          isDarkMode ? Colors.accent : Colors.primary
-                        }
+                        color={isDarkMode ? Colors.accent : Colors.primary}
                       />
                     </View>
                     <View style={styles.centreMeta}>

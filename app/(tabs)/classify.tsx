@@ -1,44 +1,42 @@
 import { CustomAlert, useCustomAlert } from "@/components/custom-alert";
-import { Colors, getColors } from "@/constants/theme";
+import { getColors } from "@/constants/theme";
 import { useApp } from "@/context/AppContext";
+import {
+    ClassificationResult,
+    classifyWasteImage,
+    getGeminiApiKey,
+    setGeminiApiKey,
+} from "@/src/services/classification";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import {
-  classifyWasteImage,
-  ClassificationResult,
-  getGeminiApiKey,
-  setGeminiApiKey,
-} from "@/src/services/classification";
-import {
-  Camera,
-  Bell,
-  Check,
-  CircleAlert,
-  Focus,
-  Image as ImageIcon,
-  Lightbulb,
-  Recycle,
-  RotateCcw,
-  Sparkles,
-  Zap,
-  ZapOff,
-  Settings2,
-  X,
-  Leaf,
-  Scale,
+    Bell,
+    Camera,
+    Check,
+    CircleAlert,
+    Focus,
+    Image as ImageIcon,
+    Leaf,
+    Lightbulb,
+    Recycle,
+    RotateCcw,
+    Scale,
+    Sparkles,
+    X,
+    Zap,
+    ZapOff,
 } from "lucide-react-native";
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  Animated,
-  Dimensions,
-  Image,
-  Modal,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Animated,
+    Dimensions,
+    Image,
+    Modal,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -62,26 +60,6 @@ const SCAN_HISTORY = [
   },
 ];
 
-const INITIAL_RESULT: ClassificationResult = {
-  name: "PET Plastic Beverage Bottle",
-  material: "Polyethylene Terephthalate (PET #1)",
-  category: "plastic",
-  binType: "Recyclable (Yellow / Blue Bin)",
-  binColor: "#006C49",
-  confidence: 96,
-  recyclable: true,
-  isWaste: true,
-  estimatedWeightGrams: 32,
-  co2SavingsKg: 0.08,
-  ecoPoints: 25,
-  tips: [
-    "Rinse out liquids before placing in bin",
-    "Crush bottle flat to save 50% bin space",
-    "Keep bottle cap screwed on for optical sorting",
-  ],
-  aiModelUsed: "Gemini Vision",
-};
-
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export default function ClassifyScreen() {
@@ -90,12 +68,22 @@ export default function ClassifyScreen() {
   const C = getColors(isDarkMode);
   const { showAlert, alertProps } = useCustomAlert();
 
-  const [activeImageUri, setActiveImageUri] = useState<string>(DEFAULT_SAMPLE_IMAGE);
+  const [activeImageUri, setActiveImageUri] =
+    useState<string>(DEFAULT_SAMPLE_IMAGE);
   const [isFlashOn, setIsFlashOn] = useState<boolean>(false);
   const [scanStatus, setScanStatus] = useState<
-    "idle" | "scanning" | "identifying" | "matched" | "not_waste" | "error"
-  >("matched");
-  const [currentResult, setCurrentResult] = useState<ClassificationResult>(INITIAL_RESULT);
+    | "idle"
+    | "scanning"
+    | "identifying"
+    | "matched"
+    | "uncertain"
+    | "not_waste"
+    | "offline"
+    | "error"
+  >("idle");
+  const [currentResult, setCurrentResult] =
+    useState<ClassificationResult | null>(null);
+  const activeRequestIdRef = useRef<string>("");
 
   // Gemini API Key management modal
   const [apiKeyModalVisible, setApiKeyModalVisible] = useState<boolean>(false);
@@ -104,9 +92,9 @@ export default function ClassifyScreen() {
   const [isKeySaving, setIsKeySaving] = useState<boolean>(false);
 
   // Animations
-  const scanLineAnim = useRef(new Animated.Value(0)).current;
-  const boxOpacityAnim = useRef(new Animated.Value(1)).current;
-  const resultCardAnim = useRef(new Animated.Value(1)).current;
+  const [scanLineAnim] = useState(() => new Animated.Value(0));
+  const [boxOpacityAnim] = useState(() => new Animated.Value(1));
+  const [resultCardAnim] = useState(() => new Animated.Value(1));
 
   // Load active Gemini key
   useEffect(() => {
@@ -130,7 +118,7 @@ export default function ClassifyScreen() {
         title: "AI Key Configured",
         message: updated
           ? "Gemini 3.8 Flash Vision AI is active for high-precision detection."
-          : "API key cleared. System switched to offline heuristics mode.",
+          : "API key cleared. Configure Gemini before analyzing waste.",
       });
     } catch {
       showAlert({
@@ -144,13 +132,29 @@ export default function ClassifyScreen() {
   };
 
   /**
-   * Starts precision classification pipeline on an image URI
+   * Starts precision classification pipeline on an image URI with request ID tracking
    */
-  const performClassification = async (uri: string, rawBase64?: string | null) => {
+  const performClassification = async (
+    uri: string,
+    rawBase64?: string | null,
+    requestId?: string,
+  ) => {
+    const currentReqId =
+      requestId ||
+      `req_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    activeRequestIdRef.current = currentReqId;
+
     try {
+      // 1. Clear previous result to prevent stale state (Requirement 3)
+      setCurrentResult(null);
       setScanStatus("scanning");
       resultCardAnim.setValue(0);
       boxOpacityAnim.setValue(1);
+
+      // Log immediately before classification (Requirement 1, 12)
+      console.log(
+        `[EcoLift Classification Start] ReqID=${currentReqId}, URI=${uri}`,
+      );
 
       // Start scanning laser line animation
       Animated.loop(
@@ -165,28 +169,49 @@ export default function ClassifyScreen() {
             duration: 1100,
             useNativeDriver: true,
           }),
-        ])
+        ]),
       ).start();
 
       // Transition to identifying after initial scan
       const idTimer = setTimeout(() => {
-        setScanStatus("identifying");
-      }, 700);
+        if (activeRequestIdRef.current === currentReqId) {
+          setScanStatus("identifying");
+        }
+      }, 600);
 
       const startTime = Date.now();
       const result = await classifyWasteImage(uri, rawBase64 || undefined);
       clearTimeout(idTimer);
 
-      // Guarantee minimum 800ms visual scanning feedback so UI transitions smoothly
-      const elapsed = Date.now() - startTime;
-      if (elapsed < 800) {
-        await new Promise((resolve) => setTimeout(resolve, 800 - elapsed));
+      // Race condition protection: discard if superseded (Requirement 3)
+      if (activeRequestIdRef.current !== currentReqId) {
+        console.log(
+          `[EcoLift Classification] ReqID ${currentReqId} superseded by ${activeRequestIdRef.current}. Discarding stale result.`,
+        );
+        return;
       }
+
+      // Guarantee minimum 600ms visual scanning feedback
+      const elapsed = Date.now() - startTime;
+      if (elapsed < 600) {
+        await new Promise((resolve) => setTimeout(resolve, 600 - elapsed));
+      }
+
+      if (activeRequestIdRef.current !== currentReqId) return;
 
       setCurrentResult(result);
 
-      if (!result.isWaste || result.category === "non_waste") {
+      if (result.errorCode === "MISSING_API_KEY") {
+        setScanStatus("offline");
+      } else if (result.errorCode || result.error) {
+        setScanStatus("error");
+      } else if (!result.isWaste || result.category === "non_waste") {
         setScanStatus("not_waste");
+      } else if (
+        result.confidenceLevel === "low" ||
+        result.category === "unknown"
+      ) {
+        setScanStatus("uncertain");
       } else {
         setScanStatus("matched");
       }
@@ -199,7 +224,9 @@ export default function ClassifyScreen() {
       }).start();
     } catch (err) {
       if (__DEV__) console.warn("Classification pipeline error:", err);
-      setScanStatus("error");
+      if (activeRequestIdRef.current === currentReqId) {
+        setScanStatus("error");
+      }
     }
   };
 
@@ -237,8 +264,16 @@ export default function ClassifyScreen() {
 
       if (!picked.canceled && picked.assets && picked.assets[0]) {
         const asset = picked.assets[0];
+        const reqId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        activeRequestIdRef.current = reqId;
+
+        // Log immediately after capture (Requirement 1, 12)
+        console.log(
+          `[EcoLift Camera Capture] URI=${asset.uri}, Width=${asset.width}, Height=${asset.height}, Base64Length=${asset.base64?.length || 0}`,
+        );
+
         setActiveImageUri(asset.uri);
-        await performClassification(asset.uri, asset.base64);
+        await performClassification(asset.uri, asset.base64, reqId);
       }
     } catch (error) {
       if (__DEV__) console.warn("ImagePicker error:", error);
@@ -246,6 +281,7 @@ export default function ClassifyScreen() {
   };
 
   const handleLogItem = () => {
+    if (!currentResult) return;
     const pts = currentResult.ecoPoints || 25;
     addEcoPoints(pts);
     showAlert({
@@ -256,12 +292,22 @@ export default function ClassifyScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: isDarkMode ? "#0E1412" : "#F9F9FF" }]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: isDarkMode ? "#0E1412" : "#F9F9FF" },
+      ]}
+    >
       <SafeAreaView style={styles.safeArea}>
         {/* Top Header */}
         <View style={styles.header}>
           <View style={styles.brandRow}>
-            <Text style={[styles.brandTitle, { color: isDarkMode ? "#95D3BA" : "#003527" }]}>
+            <Text
+              style={[
+                styles.brandTitle,
+                { color: isDarkMode ? "#95D3BA" : "#003527" },
+              ]}
+            >
               EcoLift
             </Text>
           </View>
@@ -271,7 +317,9 @@ export default function ClassifyScreen() {
                 styles.bellBtn,
                 {
                   backgroundColor: isDarkMode ? "#1E2321" : "#FFFFFF",
-                  borderColor: isDarkMode ? "rgba(255,255,255,0.08)" : "#E2E8F8",
+                  borderColor: isDarkMode
+                    ? "rgba(255,255,255,0.08)"
+                    : "#E2E8F8",
                 },
               ]}
               onPress={() => router.push("/notifications" as any)}
@@ -284,7 +332,9 @@ export default function ClassifyScreen() {
               style={styles.avatarBtn}
               activeOpacity={0.8}
             >
-              <Text style={[styles.headerProfileText, { color: C.greyText }]}>Profile</Text>
+              <Text style={[styles.headerProfileText, { color: C.greyText }]}>
+                Profile
+              </Text>
               <Image
                 source={{
                   uri: "https://lh3.googleusercontent.com/aida/AP1WRLvvebFOZ6ynMsVwLT_RhMB47PIf8hxioUnplUngiLRck_uwziGuo8q9YO5aj1foVEUmhejlyafL2z2OHqEPi7FC8azbJoc-ziJbt6qsF5SMnw3GGseHcRNMOLhOvVO7v71vEGCzSy99We7_7rFyQI5Xzz2j4GcrsBMMWBjTRHPbwqUwGF-tolAZtlI0fp2FGa_-ATEKQMsHpKcZA_Q1cKK8GQq6hUUor6q0TpvsuD-ZBS35WmtkQvEqKtrn1A2MHmfBS2lh9XHmQQ",
@@ -328,10 +378,16 @@ export default function ClassifyScreen() {
                       scanStatus === "scanning"
                         ? "#006C49"
                         : scanStatus === "identifying"
-                        ? "#F59E0B"
-                        : scanStatus === "not_waste"
-                        ? "#EF4444"
-                        : "#10B981",
+                          ? "#F59E0B"
+                          : scanStatus === "not_waste" || scanStatus === "error"
+                            ? "#EF4444"
+                            : scanStatus === "uncertain"
+                              ? "#F59E0B"
+                              : scanStatus === "offline"
+                                ? "#6B7280"
+                                : scanStatus === "matched"
+                                  ? "#10B981"
+                                  : "#10B981",
                   },
                 ]}
               />
@@ -339,10 +395,18 @@ export default function ClassifyScreen() {
                 {scanStatus === "scanning"
                   ? "AI Scanning Frame..."
                   : scanStatus === "identifying"
-                  ? "Analyzing Material Physics..."
-                  : scanStatus === "not_waste"
-                  ? "No Waste Detected"
-                  : "Match Found"}
+                    ? "Analyzing your waste..."
+                    : scanStatus === "not_waste"
+                      ? "No Waste Detected"
+                      : scanStatus === "uncertain"
+                        ? "Low Confidence"
+                        : scanStatus === "offline"
+                          ? "AI Configuration Required"
+                          : scanStatus === "error"
+                            ? "AI Unavailable"
+                            : scanStatus === "matched"
+                              ? "Match Found"
+                              : "Ready to Scan"}
               </Text>
             </View>
 
@@ -362,7 +426,9 @@ export default function ClassifyScreen() {
                 activeOpacity={0.8}
               >
                 <Sparkles size={18} color={activeApiKey ? "#10B981" : C.text} />
-                {Boolean(activeApiKey) && <View style={styles.activeKeyIndicatorDot} />}
+                {Boolean(activeApiKey) && (
+                  <View style={styles.activeKeyIndicatorDot} />
+                )}
               </TouchableOpacity>
 
               {/* Flash Toggle */}
@@ -406,7 +472,11 @@ export default function ClassifyScreen() {
           {/* Center Reticle & Animated Bounding Box */}
           <View style={styles.centerReticleContainer} pointerEvents="none">
             {/* Center Focus Icon */}
-            <Focus size={46} color="rgba(255, 255, 255, 0.4)" strokeWidth={1.5} />
+            <Focus
+              size={46}
+              color="rgba(255, 255, 255, 0.4)"
+              strokeWidth={1.5}
+            />
 
             {/* Bounding Box with Corner Accents */}
             <Animated.View
@@ -414,7 +484,8 @@ export default function ClassifyScreen() {
                 styles.boundingBox,
                 {
                   opacity: boxOpacityAnim,
-                  borderColor: scanStatus === "not_waste" ? "#F59E0B" : "#6CF8BB",
+                  borderColor:
+                    scanStatus === "not_waste" ? "#F59E0B" : "#6CF8BB",
                 },
               ]}
             >
@@ -466,7 +537,7 @@ export default function ClassifyScreen() {
           {/* Bottom Interactive Area */}
           <View style={styles.bottomOverlayArea}>
             {/* Slide-Up Result Card (Matched) */}
-            {scanStatus === "matched" && (
+            {scanStatus === "matched" && currentResult && (
               <Animated.View
                 style={[
                   styles.resultCard,
@@ -491,7 +562,9 @@ export default function ClassifyScreen() {
                     <Text style={[styles.resultTitle, { color: C.text }]}>
                       {currentResult.name}
                     </Text>
-                    <Text style={[styles.resultSubtitle, { color: C.greyText }]}>
+                    <Text
+                      style={[styles.resultSubtitle, { color: C.greyText }]}
+                    >
                       {currentResult.material}
                     </Text>
                   </View>
@@ -513,6 +586,12 @@ export default function ClassifyScreen() {
                   </View>
                 </View>
 
+                {currentResult.reason && (
+                  <Text style={[styles.nonWasteNotice, { color: C.greyText }]}>
+                    {currentResult.reason}
+                  </Text>
+                )}
+
                 {/* Badges Row */}
                 <View style={styles.badgesRow}>
                   <View
@@ -521,7 +600,9 @@ export default function ClassifyScreen() {
                       { backgroundColor: currentResult.binColor || "#006C49" },
                     ]}
                   >
-                    <Text style={styles.binBadgeText}>{currentResult.binType}</Text>
+                    <Text style={styles.binBadgeText}>
+                      {currentResult.binType}
+                    </Text>
                   </View>
 
                   <View
@@ -537,10 +618,18 @@ export default function ClassifyScreen() {
                     <Text
                       style={[
                         styles.statusBadgeText,
-                        { color: currentResult.recyclable ? "#10B981" : "#EF4444" },
+                        {
+                          color: currentResult.recyclable
+                            ? "#10B981"
+                            : "#EF4444",
+                        },
                       ]}
                     >
-                      {currentResult.recyclable ? "100% Recyclable" : "Non-Recyclable"}
+                      {currentResult.category === "e_waste"
+                        ? "E-Waste Depot"
+                        : currentResult.recyclable
+                          ? "100% Recyclable"
+                          : "Non-Recyclable"}
                     </Text>
                   </View>
                 </View>
@@ -576,17 +665,69 @@ export default function ClassifyScreen() {
                   </View>
                 </View>
 
+                {/* Disposal Guidance Box (Requirement 8, 14) */}
+                {Boolean(currentResult.disposalRecommendation) && (
+                  <View
+                    style={[
+                      styles.disposalBox,
+                      { backgroundColor: isDarkMode ? "#121715" : "#E2E8F8" },
+                    ]}
+                  >
+                    <Recycle
+                      size={14}
+                      color={isDarkMode ? "#95D3BA" : "#006C49"}
+                      style={{ marginTop: 2 }}
+                    />
+                    <Text style={[styles.disposalText, { color: C.text }]}>
+                      {currentResult.disposalRecommendation}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Alternative Predictions (Requirement 6) */}
+                {Array.isArray(currentResult.alternatives) &&
+                  currentResult.alternatives.length > 0 && (
+                    <View style={styles.alternativesBox}>
+                      <Text
+                        style={[
+                          styles.alternativesTitle,
+                          { color: C.greyText },
+                        ]}
+                      >
+                        Alternatives:{" "}
+                        <Text
+                          style={{
+                            color: C.text,
+                            fontFamily: "Poppins-Regular",
+                          }}
+                        >
+                          {currentResult.alternatives
+                            .map((alt) => `${alt.label} (${alt.confidence}%)`)
+                            .join(" • ")}
+                        </Text>
+                      </Text>
+                    </View>
+                  )}
+
                 {/* Confidence Bar */}
                 <View style={styles.confidenceBarTrack}>
                   <View
                     style={[
                       styles.confidenceBarFill,
-                      { width: `${currentResult.confidence}%` },
+                      {
+                        width: `${currentResult.confidence}%`,
+                        backgroundColor:
+                          currentResult.confidenceLevel === "high"
+                            ? "#006C49"
+                            : "#D97706",
+                      },
                     ]}
                   />
                 </View>
                 <Text style={[styles.confidenceText, { color: C.greyText }]}>
-                  {currentResult.confidence}% Match • {currentResult.aiModelUsed}
+                  {currentResult.confidence}% Match (
+                  {currentResult.confidenceLevel.toUpperCase()} CONFIDENCE) •{" "}
+                  {currentResult.aiModelUsed}
                 </Text>
 
                 {/* Preparation Tips */}
@@ -596,7 +737,9 @@ export default function ClassifyScreen() {
                       <View style={styles.tipCheckCircle}>
                         <Check size={10} color="#006C49" strokeWidth={3} />
                       </View>
-                      <Text style={[styles.tipText, { color: C.text }]}>{tip}</Text>
+                      <Text style={[styles.tipText, { color: C.text }]}>
+                        {tip}
+                      </Text>
                     </View>
                   ))}
                 </View>
@@ -604,7 +747,10 @@ export default function ClassifyScreen() {
                 {/* Action Buttons */}
                 <View style={styles.resultActionsRow}>
                   <TouchableOpacity
-                    style={[styles.primaryLogBtn, { backgroundColor: "#003527" }]}
+                    style={[
+                      styles.primaryLogBtn,
+                      { backgroundColor: "#003527" },
+                    ]}
                     onPress={handleLogItem}
                     activeOpacity={0.9}
                   >
@@ -614,7 +760,10 @@ export default function ClassifyScreen() {
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.outlineRescanBtn, { borderColor: "#003527" }]}
+                    style={[
+                      styles.outlineRescanBtn,
+                      { borderColor: "#003527" },
+                    ]}
                     onPress={() => handlePickImage(true)}
                     activeOpacity={0.8}
                   >
@@ -631,8 +780,154 @@ export default function ClassifyScreen() {
               </Animated.View>
             )}
 
+            {/* Uncertain / Low Confidence Warning Card (Requirement 5, 16) */}
+            {scanStatus === "uncertain" && currentResult && (
+              <Animated.View
+                style={[
+                  styles.resultCard,
+                  {
+                    backgroundColor: isDarkMode ? "#1A211E" : "#F0F3FF",
+                    borderColor: "#F59E0B",
+                    opacity: resultCardAnim,
+                  },
+                ]}
+              >
+                <View style={styles.resultHeaderRow}>
+                  <View style={styles.resultTitleGroup}>
+                    <Text style={[styles.resultTitle, { color: C.text }]}>
+                      {currentResult.name}
+                    </Text>
+                    <Text style={[styles.resultSubtitle, { color: "#F59E0B" }]}>
+                      {currentResult.confidence > 0
+                        ? `Low Confidence (${currentResult.confidence}%)`
+                        : "Confidence Below Reliable Threshold (<75%)"}
+                    </Text>
+                  </View>
+                  <CircleAlert size={28} color="#F59E0B" />
+                </View>
+
+                <Text style={[styles.nonWasteNotice, { color: C.greyText }]}>
+                  {currentResult.disposalRecommendation ||
+                    "The AI could not identify this item with sufficient confidence. Please retake the photo in brighter lighting or with a plain background."}
+                </Text>
+
+                <View style={styles.resultActionsRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.primaryLogBtn,
+                      { backgroundColor: "#003527" },
+                    ]}
+                    onPress={() => handlePickImage(true)}
+                    activeOpacity={0.9}
+                  >
+                    <Text style={styles.primaryLogBtnText}>Retake Photo</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.outlineRescanBtn,
+                      { borderColor: "#003527" },
+                    ]}
+                    onPress={() => handlePickImage(false)}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.outlineRescanBtnText,
+                        { color: isDarkMode ? "#95D3BA" : "#003527" },
+                      ]}
+                    >
+                      Choose from Photos
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </Animated.View>
+            )}
+
+            {/* Online AI unavailable/configuration card */}
+            {(scanStatus === "offline" || scanStatus === "error") &&
+              currentResult && (
+                <Animated.View
+                  style={[
+                    styles.resultCard,
+                    {
+                      backgroundColor: isDarkMode ? "#1A211E" : "#F0F3FF",
+                      borderColor: "#6B7280",
+                      opacity: resultCardAnim,
+                    },
+                  ]}
+                >
+                  <View style={styles.resultHeaderRow}>
+                    <View style={styles.resultTitleGroup}>
+                      <Text style={[styles.resultTitle, { color: C.text }]}>
+                        {currentResult.errorCode === "MISSING_API_KEY"
+                          ? "AI Configuration Required"
+                          : currentResult.errorCode === "NO_INTERNET"
+                            ? "Internet connection required"
+                            : "AI identification unavailable"}
+                      </Text>
+                      <Text
+                        style={[styles.resultSubtitle, { color: C.greyText }]}
+                      >
+                        {currentResult.errorCode === "MISSING_API_KEY"
+                          ? "Configure Gemini to identify waste"
+                          : "EcoLift AI identification requires an online Gemini connection"}
+                      </Text>
+                    </View>
+                    <CircleAlert size={28} color="#6B7280" />
+                  </View>
+
+                  <Text style={[styles.nonWasteNotice, { color: C.greyText }]}>
+                    {currentResult.errorCode === "MISSING_API_KEY"
+                      ? "Connect EcoLift to a configured Gemini API key to identify waste."
+                      : currentResult.errorCode === "NO_INTERNET"
+                        ? "EcoLift's AI identification currently requires an internet connection."
+                        : "Gemini could not complete the analysis. Please retry or retake the photo."}
+                  </Text>
+
+                  <View style={styles.resultActionsRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.primaryLogBtn,
+                        { backgroundColor: "#003527" },
+                      ]}
+                      onPress={() =>
+                        currentResult.errorCode === "MISSING_API_KEY"
+                          ? setApiKeyModalVisible(true)
+                          : performClassification(activeImageUri)
+                      }
+                      activeOpacity={0.9}
+                    >
+                      <Text style={styles.primaryLogBtnText}>
+                        {currentResult.errorCode === "MISSING_API_KEY"
+                          ? "Configure AI"
+                          : "Retry"}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.outlineRescanBtn,
+                        { borderColor: "#003527" },
+                      ]}
+                      onPress={() => handlePickImage(true)}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.outlineRescanBtnText,
+                          { color: isDarkMode ? "#95D3BA" : "#003527" },
+                        ]}
+                      >
+                        Retake Photo
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </Animated.View>
+              )}
+
             {/* Non-Waste Detected Warning Card */}
-            {scanStatus === "not_waste" && (
+            {scanStatus === "not_waste" && currentResult && (
               <Animated.View
                 style={[
                   styles.resultCard,
@@ -656,13 +951,17 @@ export default function ClassifyScreen() {
                 </View>
 
                 <Text style={[styles.nonWasteNotice, { color: C.greyText }]}>
-                  Please ensure the recyclable item, bottle, can, or container is placed
-                  against a neutral background and centered inside the reticle.
+                  Please ensure the recyclable item, bottle, can, or container
+                  is placed against a neutral background and centered inside the
+                  reticle.
                 </Text>
 
                 <View style={styles.resultActionsRow}>
                   <TouchableOpacity
-                    style={[styles.primaryLogBtn, { backgroundColor: "#003527" }]}
+                    style={[
+                      styles.primaryLogBtn,
+                      { backgroundColor: "#003527" },
+                    ]}
                     onPress={() => handlePickImage(true)}
                     activeOpacity={0.9}
                   >
@@ -670,7 +969,10 @@ export default function ClassifyScreen() {
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.outlineRescanBtn, { borderColor: "#003527" }]}
+                    style={[
+                      styles.outlineRescanBtn,
+                      { borderColor: "#003527" },
+                    ]}
                     onPress={() => handlePickImage(false)}
                     activeOpacity={0.8}
                   >
@@ -687,6 +989,64 @@ export default function ClassifyScreen() {
               </Animated.View>
             )}
 
+            {/* Idle Welcome State */}
+            {scanStatus === "idle" && (
+              <View
+                style={[
+                  styles.resultCard,
+                  {
+                    backgroundColor: isDarkMode ? "#1A211E" : "#F0F3FF",
+                    borderColor: isDarkMode ? "#2B3530" : "#DCE2F3",
+                  },
+                ]}
+              >
+                <View style={styles.resultHeaderRow}>
+                  <View style={styles.resultTitleGroup}>
+                    <Text style={[styles.resultTitle, { color: C.text }]}>
+                      Ready to Classify Waste
+                    </Text>
+                    <Text
+                      style={[styles.resultSubtitle, { color: C.greyText }]}
+                    >
+                      Center any recyclable, e-waste, or material in frame
+                    </Text>
+                  </View>
+                  <Focus size={24} color="#006C49" />
+                </View>
+
+                <View style={styles.resultActionsRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.primaryLogBtn,
+                      { backgroundColor: "#003527" },
+                    ]}
+                    onPress={() => handlePickImage(true)}
+                    activeOpacity={0.9}
+                  >
+                    <Text style={styles.primaryLogBtnText}>Take Photo</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.outlineRescanBtn,
+                      { borderColor: "#003527" },
+                    ]}
+                    onPress={() => handlePickImage(false)}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.outlineRescanBtnText,
+                        { color: isDarkMode ? "#95D3BA" : "#003527" },
+                      ]}
+                    >
+                      Choose from Photos
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
             {/* Quick Actions & History Thumbnails Bar */}
             <View style={styles.quickBarRow}>
               {/* Scan History Thumbnails */}
@@ -696,12 +1056,17 @@ export default function ClassifyScreen() {
                     key={item.id}
                     style={styles.historyThumbWrapper}
                     onPress={() => {
+                      const reqId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+                      activeRequestIdRef.current = reqId;
                       setActiveImageUri(item.image);
-                      performClassification(item.image);
+                      performClassification(item.image, null, reqId);
                     }}
                     activeOpacity={0.8}
                   >
-                    <Image source={{ uri: item.image }} style={styles.thumbImage} />
+                    <Image
+                      source={{ uri: item.image }}
+                      style={styles.thumbImage}
+                    />
                     <View style={styles.thumbCheckDot}>
                       <Check size={9} color="#006C49" strokeWidth={3} />
                     </View>
@@ -722,7 +1087,10 @@ export default function ClassifyScreen() {
                   onPress={() => handlePickImage(true)}
                   activeOpacity={0.8}
                 >
-                  <Camera size={18} color={isDarkMode ? "#95D3BA" : "#003527"} />
+                  <Camera
+                    size={18}
+                    color={isDarkMode ? "#95D3BA" : "#003527"}
+                  />
                 </TouchableOpacity>
               </View>
 
@@ -811,8 +1179,9 @@ export default function ClassifyScreen() {
               </View>
 
               <Text style={[styles.modalDescription, { color: C.greyText }]}>
-                To enable 99.8% precision material detection, enter your free Google Gemini
-                API Key from Google AI Studio (aistudio.google.com).
+                To enable 99.8% precision material detection, enter your free
+                Google Gemini API Key from Google AI Studio
+                (aistudio.google.com).
               </Text>
 
               <TextInput
@@ -1161,6 +1530,29 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(150, 150, 150, 0.25)",
   },
   metricLabel: {
+    fontSize: 11,
+    fontFamily: "Poppins-SemiBold",
+  },
+  disposalBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+  disposalText: {
+    flex: 1,
+    fontSize: 11,
+    fontFamily: "Poppins-Medium",
+    lineHeight: 16,
+  },
+  alternativesBox: {
+    paddingHorizontal: 2,
+    marginBottom: 8,
+  },
+  alternativesTitle: {
     fontSize: 11,
     fontFamily: "Poppins-SemiBold",
   },

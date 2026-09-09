@@ -3,5 +3,10 @@
     "source.fixAll": "explicit",
     "source.organizeImports": "explicit",
     "source.sortMembers": "explicit"
-  }
+  },
+  "files.associations": {
+    "**/supabase/**/*.sql": "pgsql",
+    "*.sql": "pgsql"
+  },
+  "mssql.intelliSense.enableIntelliSense": false
 }

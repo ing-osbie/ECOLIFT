@@ -13,6 +13,7 @@ export interface MapMarker {
   title?: string;
   type?: "user" | "collector" | "destination";
   draggable?: boolean;
+  isHighlighted?: boolean;
 }
 
 export interface EcoliftMapProps {
@@ -20,7 +21,10 @@ export interface EcoliftMapProps {
   routeCoordinates?: { latitude: number; longitude: number }[];
   style?: any;
   onMapPress?: (coords: { latitude: number; longitude: number }) => void;
-  onMarkerDragEnd?: (markerId: string, coords: { latitude: number; longitude: number }) => void;
+  onMarkerDragEnd?: (
+    markerId: string,
+    coords: { latitude: number; longitude: number },
+  ) => void;
   showUserLocation?: boolean;
 }
 
