@@ -2,7 +2,8 @@ import { GoogleIcon } from "@/components/google-icon";
 import { Colors } from "@/constants/theme";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/src/context/AuthContext";
-import { getEmailForFullName } from "@/src/services/auth";
+import { getEmailForFullName, getCurrentSession } from "@/src/services/auth";
+import { getProfile } from "@/src/services/profile";
 import { useRouter } from "expo-router";
 import {
   Check,
@@ -149,10 +150,27 @@ export default function Login() {
         authMode === "signup" ? selectedRole : undefined,
       );
       if (!completed) return;
-      setUserPhone("");
-      setUserName("Google User");
+      const session = await getCurrentSession();
+      const profile = session?.user?.id ? await getProfile(session.user.id) : null;
+      const displayName =
+        profile?.full_name ||
+        session?.user?.user_metadata?.full_name ||
+        session?.user?.user_metadata?.name ||
+        "Ecolift User";
+      const displayPhone =
+        profile?.phone || session?.user?.user_metadata?.phone || "";
+
+      setUserPhone(displayPhone);
+      setUserName(displayName);
       setIsLoggedIn(true);
-      router.replace("/");
+
+      const targetRole =
+        profile?.role || (authMode === "signup" ? selectedRole : "customer");
+      if (targetRole === "collector") {
+        router.replace("/(tabs-collector)" as any);
+      } else {
+        router.replace("/");
+      }
     } catch (err: any) {
       const msg = err?.message || "";
       if (msg.includes("provider is not enabled") || msg.includes("Unsupported provider")) {

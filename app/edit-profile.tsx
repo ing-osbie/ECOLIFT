@@ -33,6 +33,7 @@ export default function EditProfileScreen() {
   const [name, setName] = useState(userName || '');
   const [phone, setPhone] = useState(userPhone || '');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [avatarMime, setAvatarMime] = useState<string>('image/jpeg');
   const [isSaving, setIsSaving] = useState(false);
 
   const handlePickImage = async () => {
@@ -56,6 +57,9 @@ export default function EditProfileScreen() {
 
       if (!picked.canceled && picked.assets && picked.assets[0]) {
         setAvatarUri(picked.assets[0].uri);
+        if (picked.assets[0].mimeType) {
+          setAvatarMime(picked.assets[0].mimeType);
+        }
       }
     } catch (error) {
       console.warn('ImagePicker error:', error);
@@ -90,7 +94,7 @@ export default function EditProfileScreen() {
     try {
       let finalAvatarUrl = null;
       if (avatarUri) {
-        finalAvatarUrl = await uploadAvatar(avatarUri);
+        finalAvatarUrl = await uploadAvatar(avatarUri, avatarMime);
       }
 
       await updateProfile({
@@ -123,7 +127,7 @@ export default function EditProfileScreen() {
     }
   };
 
-  const displayAvatar = avatarUri || 'https://lh3.googleusercontent.com/aida-public/AB6AXuBRcEQLQqFVq_Z9EQQxI7B6x63AgOG1CAiF9cV3iLrj7KVbslnRnsCyHSCnNyG2NkiUAuozmOuBzK5VTH5fpegCY9EAmAjvdnG6KO3-KzrWbFXNizfuhFXeFy-gWmEeGOWPmj-G-NOwQiDr4tsXl2-L78ESpEsbPKmrE5slJs9_lAsEY35rJGTk41-UEGdwDxxiWoZhlSJw1PAonyDAn8olrapgZV7s93vqBqTeQ6uO2h7pwfOCBYM_';
+  const displayAvatar = avatarUri || user?.avatar_url || 'https://lh3.googleusercontent.com/aida-public/AB6AXuBRcEQLQqFVq_Z9EQQxI7B6x63AgOG1CAiF9cV3iLrj7KVbslnRnsCyHSCnNyG2NkiUAuozmOuBzK5VTH5fpegCY9EAmAjvdnG6KO3-KzrWbFXNizfuhFXeFy-gWmEeGOWPmj-G-NOwQiDr4tsXl2-L78ESpEsbPKmrE5slJs9_lAsEY35rJGTk41-UEGdwDxxiWoZhlSJw1PAonyDAn8olrapgZV7s93vqBqTeQ6uO2h7pwfOCBYM_';
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: C.screenBg }]}>

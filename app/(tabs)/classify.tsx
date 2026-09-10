@@ -1,6 +1,7 @@
 import { CustomAlert, useCustomAlert } from "@/components/custom-alert";
 import { getColors } from "@/constants/theme";
 import { useApp } from "@/context/AppContext";
+import { useAuth } from "@/src/context/AuthContext";
 import {
     ClassificationResult,
     classifyWasteImage,
@@ -65,6 +66,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 export default function ClassifyScreen() {
   const router = useRouter();
   const { isDarkMode, addEcoPoints } = useApp();
+  const { user } = useAuth();
   const C = getColors(isDarkMode);
   const { showAlert, alertProps } = useCustomAlert();
 
@@ -337,7 +339,9 @@ export default function ClassifyScreen() {
               </Text>
               <Image
                 source={{
-                  uri: "https://lh3.googleusercontent.com/aida/AP1WRLvvebFOZ6ynMsVwLT_RhMB47PIf8hxioUnplUngiLRck_uwziGuo8q9YO5aj1foVEUmhejlyafL2z2OHqEPi7FC8azbJoc-ziJbt6qsF5SMnw3GGseHcRNMOLhOvVO7v71vEGCzSy99We7_7rFyQI5Xzz2j4GcrsBMMWBjTRHPbwqUwGF-tolAZtlI0fp2FGa_-ATEKQMsHpKcZA_Q1cKK8GQq6hUUor6q0TpvsuD-ZBS35WmtkQvEqKtrn1A2MHmfBS2lh9XHmQQ",
+                  uri:
+                    user?.avatar_url ||
+                    "https://lh3.googleusercontent.com/aida/AP1WRLvvebFOZ6ynMsVwLT_RhMB47PIf8hxioUnplUngiLRck_uwziGuo8q9YO5aj1foVEUmhejlyafL2z2OHqEPi7FC8azbJoc-ziJbt6qsF5SMnw3GGseHcRNMOLhOvVO7v71vEGCzSy99We7_7rFyQI5Xzz2j4GcrsBMMWBjTRHPbwqUwGF-tolAZtlI0fp2FGa_-ATEKQMsHpKcZA_Q1cKK8GQq6hUUor6q0TpvsuD-ZBS35WmtkQvEqKtrn1A2MHmfBS2lh9XHmQQ",
                 }}
                 style={styles.avatarImage}
               />

@@ -4,9 +4,12 @@ import { GradientBackground } from "@/components/gradient-background";
 import { Colors, getColors } from "@/constants/theme";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/src/context/AuthContext";
+import { uploadAvatar } from "@/src/services/profile";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import {
   Bell,
+  Camera,
   CheckCircle2,
   ChevronRight,
   CreditCard,
@@ -21,8 +24,9 @@ import {
   Truck,
   User,
 } from "lucide-react-native";
-import React from "react";
+import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
   Image,
   Platform,
@@ -46,9 +50,61 @@ export default function Profile() {
     isDarkMode,
     toggleDarkMode,
   } = useApp();
-  const { signOut, user } = useAuth();
+  const { signOut, user, refreshProfile } = useAuth();
   const C = getColors(isDarkMode);
   const { showAlert, alertProps } = useCustomAlert();
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+
+  const handlePickAvatar = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permission.status !== "granted") {
+        showAlert({
+          type: "error",
+          title: "Permission Required",
+          message: "Media library permission is required to choose a profile picture.",
+        });
+        return;
+      }
+
+      const picked = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.8,
+        allowsEditing: true,
+        aspect: [1, 1],
+      });
+
+      if (!picked.canceled && picked.assets && picked.assets[0]) {
+        setIsUploadingAvatar(true);
+        try {
+          const pickedAsset = picked.assets[0];
+          await uploadAvatar(pickedAsset.uri, pickedAsset.mimeType || "image/jpeg");
+          await refreshProfile();
+          showAlert({
+            type: "success",
+            title: "Profile Photo Updated",
+            message: "Your profile picture has been updated successfully.",
+          });
+        } catch (uploadErr: any) {
+          console.error("Failed to upload customer avatar:", uploadErr);
+          showAlert({
+            type: "error",
+            title: "Upload Failed",
+            message: uploadErr?.message || "Could not upload photo. Please try again.",
+          });
+        } finally {
+          setIsUploadingAvatar(false);
+        }
+      }
+    } catch (err: any) {
+      console.warn("ImagePicker error:", err);
+      showAlert({
+        type: "error",
+        title: "Error",
+        message: "Could not select an image. Please try again.",
+      });
+    }
+  };
 
   const handleSwitchToDriver = async () => {
     showAlert({
@@ -116,20 +172,37 @@ export default function Profile() {
             <View style={styles.glowTopRight} />
             <View style={styles.glowBottomLeft} />
 
-            {/* Avatar with Gradient Ring & Verified Badge */}
-            <TouchableOpacity
-              style={styles.avatarWrapper}
-              onPress={() => router.push("/edit-profile" as any)}
-              activeOpacity={0.8}
-            >
-              <Image
-                source={avatarSource}
-                style={styles.avatarImage}
-              />
-              <View style={styles.verifiedDot}>
-                <CheckCircle2 size={13} color="#006C49" />
-              </View>
-            </TouchableOpacity>
+            {/* Avatar with Gradient Ring, Verified Badge, & Camera Edit Badge */}
+            <View style={styles.avatarContainer}>
+              <TouchableOpacity
+                style={styles.avatarWrapper}
+                onPress={() => router.push("/edit-profile" as any)}
+                activeOpacity={0.8}
+                disabled={isUploadingAvatar}
+              >
+                {isUploadingAvatar ? (
+                  <View style={[styles.avatarImage, styles.avatarLoader]}>
+                    <ActivityIndicator size="small" color="#6CF8BB" />
+                  </View>
+                ) : (
+                  <Image
+                    source={avatarSource}
+                    style={styles.avatarImage}
+                  />
+                )}
+                <View style={styles.verifiedDot}>
+                  <CheckCircle2 size={13} color="#006C49" />
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.cameraBadge}
+                onPress={handlePickAvatar}
+                activeOpacity={0.8}
+                disabled={isUploadingAvatar}
+              >
+                <Camera size={13} color="#FFFFFF" strokeWidth={2.5} />
+              </TouchableOpacity>
+            </View>
 
             {/* User Name & Membership */}
             <View style={styles.userNameBlock}>
@@ -500,6 +573,11 @@ const styles = StyleSheet.create({
     borderRadius: 60,
     backgroundColor: "rgba(176, 240, 214, 0.15)",
   },
+  avatarContainer: {
+    position: "relative",
+    width: 88,
+    height: 88,
+  },
   avatarWrapper: {
     position: "relative",
     width: 88,
@@ -512,6 +590,29 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     borderRadius: 44,
+  },
+  avatarLoader: {
+    backgroundColor: "#004D38",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cameraBadge: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "#006C49",
+    borderWidth: 2,
+    borderColor: "#003527",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 4,
   },
   verifiedDot: {
     position: "absolute",

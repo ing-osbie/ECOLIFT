@@ -1,6 +1,18 @@
-import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Platform, StatusBar, Switch } from 'react-native';
+import React, { useState } from 'react';
+import { 
+  StyleSheet, 
+  Text, 
+  View, 
+  TouchableOpacity, 
+  ScrollView, 
+  Platform, 
+  StatusBar, 
+  Switch,
+  Image,
+  ActivityIndicator
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
 
 import { useRouter } from 'expo-router';
 import { GradientBackground } from '@/components/gradient-background';
@@ -8,6 +20,7 @@ import { GlassCard } from '@/components/glass-card';
 import { Colors, getColors } from '@/constants/theme';
 import { useApp } from '@/context/AppContext';
 import { useAuth } from '@/src/context/AuthContext';
+import { uploadAvatar } from '@/src/services/profile';
 import { CustomAlert, useCustomAlert } from '@/components/custom-alert';
 import { 
   User, 
@@ -21,15 +34,71 @@ import {
   Check,
   Moon,
   Sun,
-  Award
+  Award,
+  Camera
 } from 'lucide-react-native';
+
+const COLLECTOR_AVATAR_URI =
+  "https://lh3.googleusercontent.com/aida/AEtjO1XcXV5fbdHGNsqeCGly0UlSej52rtC_mjiNz-wgtk0IBvm41436Cn7_bH9IuDiDvPj1XQSSO44Hr7AyapNiRtQB5kBbalFGbLkan0qIhiWUqxd8wsp5doOx5bEsgKli46jrIB_MALi29-JIacOn2bNGMtxgtTwDyKeQcm2blObJA3fmUpgrt2IV1okVTRPF8nMFwl28EpQTFJGxSZp_CpCW8WoJpcSQKvN-XoqbMu_XpGLQPiuWQgR6DJaPWS5IlNcQiXDOgKPOvw";
 
 export default function CollectorProfile() {
   const router = useRouter();
   const { userName, userPhone, isCollectorVerified, setIsLoggedIn, isDarkMode, toggleDarkMode } = useApp();
-  const { signOut } = useAuth();
+  const { signOut, user, refreshProfile } = useAuth();
   const C = getColors(isDarkMode);
   const { showAlert, alertProps } = useCustomAlert();
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+
+  const handlePickAvatar = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permission.status !== 'granted') {
+        showAlert({
+          type: 'error',
+          title: 'Permission Required',
+          message: 'Media library permission is required to choose a profile picture.',
+        });
+        return;
+      }
+
+      const picked = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+        allowsEditing: true,
+        aspect: [1, 1],
+      });
+
+      if (!picked.canceled && picked.assets && picked.assets[0]) {
+        setIsUploadingAvatar(true);
+        try {
+          const pickedAsset = picked.assets[0];
+          await uploadAvatar(pickedAsset.uri, pickedAsset.mimeType || 'image/jpeg');
+          await refreshProfile();
+          showAlert({
+            type: 'success',
+            title: 'Profile Photo Updated',
+            message: 'Your driver profile picture has been updated.',
+          });
+        } catch (uploadErr: any) {
+          console.error('Failed to upload collector avatar:', uploadErr);
+          showAlert({
+            type: 'error',
+            title: 'Upload Failed',
+            message: uploadErr?.message || 'Could not upload photo. Please check your connection and try again.',
+          });
+        } finally {
+          setIsUploadingAvatar(false);
+        }
+      }
+    } catch (err: any) {
+      console.warn('ImagePicker error:', err);
+      showAlert({
+        type: 'error',
+        title: 'Error',
+        message: 'Could not select an image. Please try again.',
+      });
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -88,18 +157,37 @@ export default function CollectorProfile() {
           {/* Header section */}
           <View style={styles.profileHeader}>
             <View style={styles.avatarWrapper}>
-              <View style={styles.avatarCircle}>
-                <User size={36} color="#FFFFFF" strokeWidth={2} />
-              </View>
+              <TouchableOpacity
+                onPress={handlePickAvatar}
+                activeOpacity={0.8}
+                disabled={isUploadingAvatar}
+              >
+                <View style={[styles.avatarCircle, { borderColor: isDarkMode ? '#95D3BA' : '#006C49' }]}>
+                  {isUploadingAvatar ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Image
+                      source={{ uri: user?.avatar_url || COLLECTOR_AVATAR_URI }}
+                      style={styles.avatarImage}
+                      resizeMode="cover"
+                    />
+                  )}
+                </View>
+                <View style={[styles.cameraBadge, { backgroundColor: C.primary, borderColor: isDarkMode ? '#0E1412' : '#FFFFFF' }]}>
+                  <Camera size={13} color="#FFFFFF" strokeWidth={2.5} />
+                </View>
+              </TouchableOpacity>
               {isCollectorVerified && (
-                <View style={[styles.verifyBadge, { backgroundColor: C.primary }]}>
+                <View style={[styles.verifyBadge, { backgroundColor: C.accent, borderColor: isDarkMode ? '#0E1412' : '#FFFFFF' }]}>
                   <Check size={10} color={isDarkMode ? '#000000' : '#FFFFFF'} strokeWidth={4} />
                 </View>
               )}
             </View>
 
             <View style={styles.userMeta}>
-              <Text style={[styles.userName, { color: C.text }]}>{userName}</Text>
+              <Text style={[styles.userName, { color: C.text }]}>
+                {user?.full_name || userName || "Kwame Mensah"}
+              </Text>
               <View style={styles.verifiedRow}>
                 <Award size={14} color={C.primary} />
                 <Text style={[styles.verifiedText, { color: C.primary }]}>Verified Ecolift Collector</Text>
@@ -214,21 +302,42 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: '#FFFFFF',
+    overflow: 'hidden',
     shadowColor: Colors.shadowColor,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 3,
   },
-  verifyBadge: {
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  cameraBadge: {
     position: 'absolute',
     bottom: -2,
     right: -2,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.accent,
-    borderWidth: 3,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  verifyBadge: {
+    position: 'absolute',
+    bottom: -2,
+    left: -2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2.5,
     borderColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',

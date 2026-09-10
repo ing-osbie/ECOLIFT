@@ -135,25 +135,61 @@ export async function signInWithGoogle(
   }
 
   const code = extractCodeFromUrl(result.url);
-  const { error: sessionError } =
+  const { data: sessionData, error: sessionError } =
     await supabase.auth.exchangeCodeForSession(code);
 
   if (sessionError) throw sessionError;
 
+  const authUser = sessionData?.user;
+  if (authUser) {
+    const metaAvatar =
+      authUser.user_metadata?.avatar_url || authUser.user_metadata?.picture;
+    const metaName =
+      authUser.user_metadata?.full_name || authUser.user_metadata?.name;
+
+    if (metaAvatar || metaName) {
+      try {
+        await supabase
+          .from("profiles")
+          .update({
+            ...(metaAvatar ? { avatar_url: metaAvatar } : {}),
+            ...(metaName ? { full_name: metaName } : {}),
+          })
+          .eq("id", authUser.id);
+      } catch {
+        // Non-blocking sync
+      }
+    }
+  }
+
   // Google OAuth does not carry our app's selected role.
-  // Restore the role saved before opening Google and create the
-  // correct profile through the secure Supabase RPC.
+  // Restore the role saved before opening Google and create/update the
+  // correct profile through the secure Supabase RPC or direct update.
   const signupRole = await AsyncStorage.getItem("ecolift_google_signup_role");
 
   if (signupRole === "customer" || signupRole === "collector") {
-    const { error: profileError } = await supabase.rpc(
-      "ensure_google_profile",
-      {
-        p_role: signupRole,
-      },
-    );
+    try {
+      const { error: profileError } = await supabase.rpc(
+        "ensure_google_profile",
+        {
+          p_role: signupRole,
+        },
+      );
 
-    if (profileError) throw profileError;
+      if (profileError && authUser?.id) {
+        await supabase
+          .from("profiles")
+          .update({ role: signupRole })
+          .eq("id", authUser.id);
+      }
+    } catch {
+      if (authUser?.id) {
+        await supabase
+          .from("profiles")
+          .update({ role: signupRole })
+          .eq("id", authUser.id);
+      }
+    }
   }
 
   await AsyncStorage.removeItem("ecolift_google_signup_role");

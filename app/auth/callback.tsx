@@ -61,6 +61,32 @@ export default function AuthCallback() {
 
         if (!mounted) return;
 
+        // Sync Google avatar/name if missing
+        const metaAvatar =
+          session.user.user_metadata?.avatar_url ||
+          session.user.user_metadata?.picture;
+        const metaName =
+          session.user.user_metadata?.full_name ||
+          session.user.user_metadata?.name;
+
+        if (profile) {
+          const updates: { avatar_url?: string; full_name?: string } = {};
+          if (metaAvatar && !profile.avatar_url) {
+            updates.avatar_url = metaAvatar;
+            profile.avatar_url = metaAvatar;
+          }
+          if (metaName && (!profile.full_name || profile.full_name.trim() === "")) {
+            updates.full_name = metaName;
+            profile.full_name = metaName;
+          }
+          if (Object.keys(updates).length > 0) {
+            await supabase
+              .from("profiles")
+              .update(updates)
+              .eq("id", session.user.id);
+          }
+        }
+
         if (profile?.role === "collector") {
           router.replace("/(tabs-collector)");
         } else {

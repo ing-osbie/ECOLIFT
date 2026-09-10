@@ -2,6 +2,7 @@ import { CustomAlert, useCustomAlert } from "@/components/custom-alert";
 import { EcoliftMap } from "@/components/ecolift-map";
 import { getColors } from "@/constants/theme";
 import { useApp } from "@/context/AppContext";
+import { useAuth } from "@/src/context/AuthContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
@@ -44,6 +45,7 @@ const COLLECTOR_AVATAR_URI =
 export default function CollectorHome() {
   const router = useRouter();
   const { isDarkMode, collectorEarningsToday } = useApp();
+  const { user } = useAuth();
   const C = getColors(isDarkMode);
   const { showAlert, alertProps } = useCustomAlert();
 
@@ -283,7 +285,7 @@ export default function CollectorHome() {
             activeOpacity={0.8}
           >
             <Image
-              source={{ uri: COLLECTOR_AVATAR_URI }}
+              source={{ uri: user?.avatar_url || COLLECTOR_AVATAR_URI }}
               style={styles.avatarImage}
             />
             <View

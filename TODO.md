@@ -91,3 +91,53 @@
   - `npx expo lint` passes with zero errors
   - `npx expo export --platform web` succeeds
   - Confirmed `.env` is git-ignored (secret keys never committed)
+
+## 11. AI Waste & Material Classification System Overhaul
+
+- [x] **Eliminated Hardcoded Fallbacks**:
+  - Removed all hardcoded `"Clear PET Plastic Beverage Bottle"`, `"93% Match"`, and static heuristics
+  - Fixed initial state in `app/(tabs)/classify.tsx` to start in a clean `idle` state
+- [x] **Genuine Vision Model Integration**:
+  - Updated model candidates to active Google Gemini endpoints: `gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-1.5-flash`
+  - Upgraded API payload to standard protobuf JSON mapping (`inlineData` and `mimeType`) with request timeouts
+- [x] **Expanded Taxonomy & Material Distinction**:
+  - Full taxonomy covering 10 categories: `e_waste`, `metal`, `plastic`, `paper`, `glass`, `organic`, `textiles`, `hazardous`, `non_waste`, `unknown`
+  - Explicit separation between `objectType` (e.g. `laptop`) and underlying `material` (e.g. `aluminum, PCBs, battery`)
+- [x] **Confidence Thresholding & Top-K Alternatives**:
+  - High ($\ge 80\%$), Medium ($60\%-79\%$), and Low ($<60\%$) confidence levels
+  - Low confidence or unidentifiable items trigger an "Unable to Confidently Identify Item" warning with a retake prompt; never defaulted to plastic
+  - Top-K alternative matches parsed and displayed in UI
+- [x] **Category-Specific Guidance**:
+  - Dynamic bin color, bin type, recyclability status, CO2 savings, and actionable disposal guidance (e.g. e-waste depot vs curbside bins vs battery kiosks)
+- [x] **State Management & Race-Condition Guard**:
+  - Immediate clearance of stale results on new capture
+  - Request ID tracking to discard superseded requests
+- [x] **Safe Offline Handling**:
+  - Transparently returns "Offline Identification Unavailable" ($0\%$ confidence) when offline or unconfigured; no fabricated classifications
+- [x] **Workspace Configuration**:
+  - Configured `.vscode/settings.json` with PostgreSQL file associations for Supabase `.sql` files, resolving false-positive MSSQL diagnostics
+
+## 12. Google Profile Picture Sync & Gallery Avatar Upload (Users & Drivers)
+
+- [x] **Google OAuth Profile Picture Auto-Sync**:
+  - Updated `handle_new_user()` trigger in [`supabase/schema.sql`](file:///Users/osbie/Downloads/ecolift_app/supabase/schema.sql) and created [`supabase/google_avatar_sync.sql`](file:///Users/osbie/Downloads/ecolift_app/supabase/google_avatar_sync.sql) migration to extract `avatar_url` or `picture` from `auth.users.raw_user_meta_data`.
+  - Updated `ensure_my_profile` function to retrieve `avatar_url` from auth user metadata when profile is created or repaired.
+  - Added automatic metadata sync in [`src/services/profile.ts`](file:///Users/osbie/Downloads/ecolift_app/src/services/profile.ts) (`getProfile`) so existing and newly authenticated users immediately back-populate their Google avatar into `public.profiles`.
+  - Enhanced [`src/services/auth.ts`](file:///Users/osbie/Downloads/ecolift_app/src/services/auth.ts) (`signInWithGoogle`) and [`app/auth/callback.tsx`](file:///Users/osbie/Downloads/ecolift_app/app/auth/callback.tsx) to sync Google metadata on session exchange.
+  - Enhanced [`app/login.tsx`](file:///Users/osbie/Downloads/ecolift_app/app/login.tsx) (`handleGoogleSignIn`) to dynamically load real profile name and route based on user role (e.g. `/(tabs-collector)` for drivers).
+- [x] **Gallery Profile Picture Upload for Drivers / Collectors**:
+  - Replaced static placeholder icon on the collector profile in [`app/(tabs-collector)/profile.tsx`](file:///Users/osbie/Downloads/ecolift_app/app/(tabs-collector)/profile.tsx) with a real avatar image (`user?.avatar_url || COLLECTOR_AVATAR_URI`).
+  - Added Camera badge overlay and touchable upload action allowing drivers to pick pictures directly from their mobile gallery via `expo-image-picker`.
+  - Implemented upload via `uploadAvatar()`, refreshed profile with `refreshProfile()`, and provided real-time loading spinner and custom alert feedback.
+  - Displays dynamic driver name (`user?.full_name || userName || "Kwame Mensah"`).
+- [x] **Gallery Profile Picture Upload for Customers / Citizens**:
+  - Added Camera badge overlay to customer profile avatar on [`app/(tabs)/profile.tsx`](file:///Users/osbie/Downloads/ecolift_app/app/(tabs)/profile.tsx) for 1-tap direct gallery uploads with instant feedback.
+  - Fixed [`app/edit-profile.tsx`](file:///Users/osbie/Downloads/ecolift_app/app/edit-profile.tsx) where `displayAvatar` ignored `user?.avatar_url`.
+  - Preserved picked MIME type and updated `uploadAvatar()` call in edit profile.
+- [x] **Universal Header & Screen Avatar Fallback Fixes**:
+  - [`app/(tabs)/classify.tsx`](file:///Users/osbie/Downloads/ecolift_app/app/(tabs)/classify.tsx): Replaced hardcoded sample image with `user?.avatar_url || DEFAULT_CUSTOMER_AVATAR`.
+  - [`app/(tabs-collector)/index.tsx`](file:///Users/osbie/Downloads/ecolift_app/app/(tabs-collector)/index.tsx): Replaced static collector avatar with `user?.avatar_url || COLLECTOR_AVATAR_URI`.
+- [x] **Resilient Avatar Upload Service**:
+  - [`src/services/profile.ts`](file:///Users/osbie/Downloads/ecolift_app/src/services/profile.ts) (`uploadAvatar`): Added native Blob and base64 ArrayBuffer fallback (`expo-file-system/legacy`), unique timestamped storage paths `${userId}/avatar_${Date.now()}.${ext}`, and cache-busting URLs (`?t=...`) for instant rendering.
+- [x] **Verification**:
+  - Verified with `npx tsc --noEmit` (0 errors).
