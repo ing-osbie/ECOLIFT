@@ -9,6 +9,7 @@ import React, {
 
 import { useAuth } from "@/src/context/AuthContext";
 import * as collectorService from "@/src/services/collector";
+import { dispatchOrder } from "@/src/services/dispatch";
 import * as notificationsService from "@/src/services/notifications";
 import * as ordersService from "@/src/services/orders";
 import * as schedulesService from "@/src/services/schedules";
@@ -529,18 +530,55 @@ export const AppContextProvider: React.FC<{
     try {
       const dbOrder = await ordersService.createOrder(input);
       if (dbOrder) {
+        console.log("CUSTOMER: [ORDER CREATED]", dbOrder.id);
+        console.log("CUSTOMER: [ORDER ID]", dbOrder.id);
+        // The order remains real even when nobody is currently available. The
+        // retry can be initiated later without inventing a local-only order.
+        dispatchOrder(dbOrder.id).catch((error) =>
+          console.warn("[DISPATCH PENDING]", error.message),
+        );
         addOrder(mapDbOrderToUi(dbOrder));
         addNotification({
           title: "Pickup Confirmed",
           body: `Your ${dbOrder.waste_type} pickup has been booked.`,
           type: "match",
         });
+        return dbOrder;
       }
-      return dbOrder;
     } catch (err) {
-      console.warn("createPickupOrder error:", err);
-      return null;
+      console.warn("createPickupOrder backend error:", err);
     }
+
+    // Offline drafts must never masquerade as dispatched orders: no collector
+    // could receive them and the customer would wait forever.
+    return null;
+    /* Legacy local fallback retained below for reference.
+    const fallbackOrder: DbOrder = {
+      id: `local-order-${Date.now()}`,
+      customer_id: user?.id || "local-user",
+      waste_type: input.waste_type,
+      pickup_lat: input.pickup_lat ?? null,
+      pickup_lng: input.pickup_lng ?? null,
+      pickup_address: input.pickup_address ?? null,
+      disposal_lat: input.disposal_lat ?? null,
+      disposal_lng: input.disposal_lng ?? null,
+      disposal_address: input.disposal_address ?? null,
+      bags_count: input.bags_count ?? 1,
+      price: input.price ?? 45,
+      status: "matching",
+      payment_method: input.payment_method ?? "momo",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    addOrder(mapDbOrderToUi(fallbackOrder));
+    addNotification({
+      title: "Pickup Confirmed",
+      body: `Your ${fallbackOrder.waste_type} pickup has been booked.`,
+      type: "match",
+    });
+    return fallbackOrder;
+    */
   };
 
   const addNotification = (notif: Omit<NotificationItem, "id" | "time">) => {

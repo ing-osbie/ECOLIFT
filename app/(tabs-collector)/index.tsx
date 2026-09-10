@@ -3,6 +3,12 @@ import { EcoliftMap } from "@/components/ecolift-map";
 import { getColors } from "@/constants/theme";
 import { useApp } from "@/context/AppContext";
 import { useAuth } from "@/src/context/AuthContext";
+import { acceptJob, completeCollectorJob, getCollectorJobs, setCollectorLocation, setCollectorOnline, setOrderEnRoute } from "@/src/services/collector";
+import { declineOffer, distanceMeters, ensureCollectorOnline, setOrderLifecycle, startActiveJobLocationTracking, subscribeToAssignedJobs } from "@/src/services/dispatch";
+import { getOrderById } from "@/src/services/orders";
+import { CollectorJob } from "@/src/types/collector";
+import { Order } from "@/src/types/order";
+import * as Location from "expo-location";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
@@ -28,6 +34,7 @@ import { useEffect, useState } from "react";
 import {
     Animated,
     Image,
+    Modal,
     Platform,
     ScrollView,
     StyleSheet,
@@ -50,10 +57,77 @@ export default function CollectorHome() {
   const { showAlert, alertProps } = useCustomAlert();
 
   const [isOnline, setIsOnline] = useState(true);
+  const [activeJob, setActiveJob] = useState<CollectorJob | null>(null);
+  const [activeOrder, setActiveOrder] = useState<Order | null>(null);
+  const [pickupStarted, setPickupStarted] = useState(false);
+  const [waitSeconds, setWaitSeconds] = useState(0);
   const [activeJobState, setActiveJobState] = useState<
     "idle" | "offered" | "navigating" | "payment_pending" | "completed"
-  >("offered");
+  >("idle");
   const [offerCountdown, setOfferCountdown] = useState(25);
+  const [locationWatcher, setLocationWatcher] = useState<{ remove: () => void } | null>(null);
+  const [driverCoords, setDriverCoords] = useState<{ latitude: number; longitude: number }>({
+    latitude: 5.564,
+    longitude: -0.192,
+  });
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    // 1. Ensure collector is present in public.collectors and online
+    void ensureCollectorOnline(user.id).then((profile) => {
+      if (profile) setIsOnline(profile.is_online);
+    });
+
+    // 2. Fetch current GPS position for collector map marker
+    Location.requestForegroundPermissionsAsync().then((perm) => {
+      if (perm.status === "granted") {
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+          .then((pos) => {
+            setCollectorLocation(pos.coords.latitude, pos.coords.longitude);
+            setDriverCoords({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+          })
+          .catch(() => {});
+      }
+    });
+
+    const loadJob = async (job: CollectorJob) => {
+      setActiveJob(job);
+      if (job.order_id) {
+        const order = await getOrderById(job.order_id);
+        setActiveOrder(order);
+      }
+      if (job.status === "offered") {
+        console.log("COLLECTOR: [SHOWING REQUEST]", job.id);
+        setOfferCountdown(25);
+        setActiveJobState("offered");
+      } else if (["accepted", "en_route", "in_progress"].includes(job.status)) {
+        setActiveJobState("navigating");
+      } else if (job.status === "arrived" || job.status === "pickup_in_progress") {
+        setActiveJobState("payment_pending");
+      } else if (["cancelled", "declined", "completed"].includes(job.status)) {
+        setActiveJobState("idle");
+      }
+    };
+
+    void getCollectorJobs(user.id).then((jobs) => {
+      const active = jobs.find((job) =>
+        ["offered", "accepted", "en_route", "in_progress", "arrived", "pickup_in_progress"].includes(job.status)
+      );
+      if (active) void loadJob(active);
+    });
+
+    return subscribeToAssignedJobs(user.id, loadJob);
+  }, [user?.id]);
+
+  // Server time is stored as arrived_at. Reconstruct the four-minute period on
+  // every app launch instead of trusting a local countdown.
+  useEffect(() => {
+    const arrivedAt = activeJob?.arrived_at;
+    if (!arrivedAt) return;
+    const update = () => setWaitSeconds(Math.max(0, 240 - Math.floor((Date.now() - new Date(arrivedAt).getTime()) / 1000)));
+    update(); const timer = setInterval(update, 1000); return () => clearInterval(timer);
+  }, [activeJob?.arrived_at]);
 
   // Pulse animation for online indicator
   const pulseAnim = useState(new Animated.Value(1))[0];
@@ -95,46 +169,76 @@ export default function CollectorHome() {
     return () => clearInterval(timer);
   }, [activeJobState, offerCountdown]);
 
+  const pickupLat = activeOrder?.pickup_lat ?? activeJob?.pickup_lat ?? 5.5593;
+  const pickupLng = activeOrder?.pickup_lng ?? activeJob?.pickup_lng ?? -0.1974;
+  const disposalLat = activeOrder?.disposal_lat ?? 5.57;
+  const disposalLng = activeOrder?.disposal_lng ?? -0.185;
+  const customerName = activeJob?.customer_name || activeOrder?.customer_name || "Customer";
+  const pickupAddr = activeJob?.pickup_address || activeOrder?.pickup_address || "Pickup location";
+
   const mapMarkers = [
     {
       id: "driver",
-      latitude: 5.564,
-      longitude: -0.192,
-      title: "Your Location (Truck #4)",
+      latitude: driverCoords.latitude,
+      longitude: driverCoords.longitude,
+      title: "Your Location (EcoLift Collector)",
       type: "collector" as const,
     },
-    {
-      id: "pickup1",
-      latitude: 5.5593,
-      longitude: -0.1974,
-      title: "Customer: Abena Serwaa (Osu RE)",
-      type: "user" as const,
-    },
+    ...(activeJobState !== "idle"
+      ? [
+          {
+            id: "pickup1",
+            latitude: pickupLat,
+            longitude: pickupLng,
+            title: `Customer: ${customerName}`,
+            type: "user" as const,
+          },
+        ]
+      : []),
     {
       id: "station",
-      latitude: 5.57,
-      longitude: -0.185,
-      title: "Agbogbloshie Station #2",
+      latitude: disposalLat,
+      longitude: disposalLng,
+      title: activeOrder?.disposal_address || "Recycling Depot #2",
       type: "destination" as const,
     },
   ];
 
   const routePolyline = [
-    { latitude: 5.564, longitude: -0.192 },
-    { latitude: 5.5593, longitude: -0.1974 },
-    { latitude: 5.57, longitude: -0.185 },
+    driverCoords,
+    { latitude: pickupLat, longitude: pickupLng },
+    { latitude: disposalLat, longitude: disposalLng },
   ];
 
-  const handleAcceptJob = () => {
-    setActiveJobState("navigating");
+  const handleAcceptJob = async () => {
+    if (!activeJob?.order_id) return;
+    try {
+      console.log("COLLECTOR: [ACCEPT PRESSED]", activeJob.order_id);
+      await acceptJob(activeJob.order_id);
+      await setOrderEnRoute(activeJob.order_id);
+      console.log("COLLECTOR: [ACCEPT SUCCESS]", activeJob.order_id);
+      setActiveJobState("navigating");
+
+      const order = activeOrder ?? (await getOrderById(activeJob.order_id));
+      if (order) {
+        setActiveOrder(order);
+        const watcher = await startActiveJobLocationTracking(order, () => handleArrivedAtCustomer());
+        setLocationWatcher(watcher);
+      }
+    } catch (error: any) {
+      showAlert({ type: "error", title: "Offer unavailable", message: error.message });
+      return;
+    }
+
     showAlert({
       type: "success",
-      title: "Job Accepted & Map Navigation Active!",
-      message: "Navigating to Abena Serwaa in Osu RE (2.4 km away).",
+      title: "Job Accepted & Navigation Active!",
+      message: `Navigating to ${customerName} at ${pickupAddr}.`,
     });
   };
 
-  const handleDeclineJob = () => {
+  const handleDeclineJob = async () => {
+    if (activeJob) await declineOffer(activeJob.id, activeJob.order_id ?? undefined);
     setActiveJobState("idle");
     showAlert({
       type: "info",
@@ -143,17 +247,43 @@ export default function CollectorHome() {
     });
   };
 
-  const handleArrivedAtCustomer = () => {
-    setActiveJobState("payment_pending");
+  const handleArrivedAtCustomer = async () => {
+    if (!activeJob?.order_id) return;
+    try {
+      console.log("ARRIVAL: [ARRIVED EVENT RECEIVED]", activeJob.order_id);
+      await setOrderLifecycle(activeJob.order_id, "arrived");
+      setActiveJobState("payment_pending");
+    } catch (error: any) {
+      showAlert({ type: "error", title: "Could not mark arrival", message: error.message });
+    }
   };
 
-  const handleConfirmMoMoPayment = () => {
-    setActiveJobState("idle");
-    showAlert({
-      type: "success",
-      title: "Payment Received & Job Completed!",
-      message: "GH₵ 38.00 MTN Mobile Money confirmed. Wallet updated.",
-    });
+  const handleConfirmMoMoPayment = async () => {
+    if (!activeJob?.order_id) return;
+    try {
+      if (!pickupStarted) {
+        await setOrderLifecycle(activeJob.order_id, "pickup_in_progress");
+        setPickupStarted(true);
+        showAlert({ type: "success", title: "Pickup Started", message: "Customer has been notified in real time." });
+        return;
+      }
+      await completeCollectorJob(activeJob.order_id);
+      if (locationWatcher) {
+        locationWatcher.remove();
+        setLocationWatcher(null);
+      }
+      setActiveJobState("idle");
+      setActiveJob(null);
+      setActiveOrder(null);
+      setPickupStarted(false);
+      showAlert({
+        type: "success",
+        title: "Job Completed!",
+        message: `GH₵ ${Number(activeJob?.fare || 38).toFixed(2)} payment confirmed. Wallet updated.`,
+      });
+    } catch (error: any) {
+      showAlert({ type: "error", title: "Could not complete pickup", message: error.message });
+    }
   };
 
   return (
@@ -216,6 +346,61 @@ export default function CollectorHome() {
       </View>
 
       <SafeAreaView style={styles.safeArea} edges={["top"]}>
+        <Modal visible={activeJobState === "offered" && !!activeJob} transparent animationType="slide" onRequestClose={handleDeclineJob}>
+          <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.55)", padding: 18 }}>
+            <View style={{ backgroundColor: isDarkMode ? "#141C18" : "#FFFFFF", borderRadius: 24, padding: 22, shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 16, elevation: 12 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Zap size={16} color={C.primary} />
+                  <Text style={{ color: C.primary, fontFamily: "Poppins-Bold", fontSize: 13, letterSpacing: 0.5 }}>NEW PICKUP OFFER</Text>
+                </View>
+                <View style={{ backgroundColor: "rgba(239, 68, 68, 0.12)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Clock size={12} color="#EF4444" />
+                  <Text style={{ color: "#EF4444", fontFamily: "Poppins-Bold", fontSize: 13 }}>{offerCountdown}s</Text>
+                </View>
+              </View>
+
+              <Text style={{ color: C.text, fontFamily: "Poppins-Bold", fontSize: 20, marginTop: 10 }}>
+                {activeJob?.waste_type.replace("_", " ").toUpperCase()} COLLECTION
+              </Text>
+
+              <View style={{ marginTop: 10, padding: 12, backgroundColor: isDarkMode ? "rgba(255,255,255,0.04)" : "#F8FAFC", borderRadius: 14, gap: 6 }}>
+                <Text style={{ color: C.text, fontFamily: "Poppins-Medium", fontSize: 15 }}>
+                  👤 {activeJob?.customer_name || activeOrder?.customer_name || "EcoLift Customer"}
+                  {activeJob?.customer_phone ? ` · 📞 ${activeJob.customer_phone}` : ""}
+                </Text>
+                <Text style={{ color: C.greyText, fontSize: 13 }}>
+                  📍 {activeJob?.pickup_address || "Pickup address shared after acceptance"}
+                </Text>
+                <Text style={{ color: C.greyText, fontSize: 13 }}>
+                  📦 {activeJob?.bags_count || 1} bags / containers
+                </Text>
+              </View>
+
+              <View style={{ marginTop: 12, padding: 12, backgroundColor: isDarkMode ? "rgba(108, 248, 187, 0.08)" : "#F0FDF4", borderRadius: 14, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                <Text style={{ color: C.greyText, fontSize: 14 }}>Driver Payout</Text>
+                <Text style={{ color: isDarkMode ? "#6CF8BB" : "#006C49", fontFamily: "Poppins-Bold", fontSize: 19 }}>
+                  GH₵ {Number(activeJob?.fare ?? 38).toFixed(2)}
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: "row", gap: 12, marginTop: 18 }}>
+                <TouchableOpacity
+                  onPress={handleDeclineJob}
+                  style={{ flex: 1, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center" }}
+                >
+                  <Text style={{ color: C.text, fontFamily: "Poppins-Medium", fontSize: 15 }}>Decline</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleAcceptJob}
+                  style={{ flex: 1.6, padding: 14, borderRadius: 14, backgroundColor: C.primary, alignItems: "center", justifyContent: "center" }}
+                >
+                  <Text style={{ color: "#FFFFFF", fontFamily: "Poppins-Bold", fontSize: 15 }}>Accept & Navigate</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
         {/* Brand Header */}
         <View style={styles.brandHeader}>
           <View style={styles.brandLeft}>
@@ -371,7 +556,10 @@ export default function CollectorHome() {
                 true: isDarkMode ? "#10B981" : "#006C49",
               }}
               thumbColor={isOnline ? "#B6FF3C" : "#F3F4F6"}
-              onValueChange={setIsOnline}
+              onValueChange={async (online) => {
+                setIsOnline(online);
+                try { await setCollectorOnline(online); } catch (error: any) { setIsOnline(!online); showAlert({ type: "error", title: "Status not updated", message: error.message }); }
+              }}
               value={isOnline}
             />
           </View>
@@ -689,7 +877,7 @@ export default function CollectorHome() {
                         { color: isDarkMode ? "#F9F9FF" : "#003527" },
                       ]}
                     >
-                      Abena Serwaa (Osu RE)
+                      {customerName}
                     </Text>
                     <Text
                       style={[
@@ -697,7 +885,7 @@ export default function CollectorHome() {
                         { color: isDarkMode ? "#6CF8BB" : "#006C49" },
                       ]}
                     >
-                      GH₵ 38.00
+                      GH₵ {Number(activeJob?.fare || activeOrder?.price || 38).toFixed(2)}
                     </Text>
                   </View>
 
@@ -707,7 +895,7 @@ export default function CollectorHome() {
                       { color: isDarkMode ? "#8E9A94" : "#718096" },
                     ]}
                   >
-                    2.4 km away · Plastic & Metal (approx 45 kg)
+                    {pickupAddr} · {activeJob?.waste_type || "Household"} ({activeJob?.bags_count || 1} bags)
                   </Text>
 
                   {/* Accept / Decline Buttons */}
@@ -817,7 +1005,7 @@ export default function CollectorHome() {
                       { color: isDarkMode ? "#F9F9FF" : "#003527" },
                     ]}
                   >
-                    Abena Serwaa - 12 Ring Rd
+                    {customerName} · {pickupAddr.split(",")[0]}
                   </Text>
                   <Text
                     style={[
@@ -825,7 +1013,7 @@ export default function CollectorHome() {
                       { color: isDarkMode ? "#8E9A94" : "#718096" },
                     ]}
                   >
-                    2.4 km to pickup point · ETA 6 mins
+                    {(distanceMeters(driverCoords.latitude, driverCoords.longitude, pickupLat, pickupLng) / 1000).toFixed(1)} km to pickup point · ETA {Math.max(1, Math.round((distanceMeters(driverCoords.latitude, driverCoords.longitude, pickupLat, pickupLng) / 1000) * 2.5))} mins
                   </Text>
 
                   <TouchableOpacity
@@ -878,7 +1066,7 @@ export default function CollectorHome() {
                       <Text
                         style={[styles.offerBadgeText, { color: "#10B981" }]}
                       >
-                        Payment Verification
+                        {pickupStarted ? "Complete pickup" : waitSeconds > 0 ? `Waiting period · ${Math.ceil(waitSeconds / 60)} min` : "Ready to start pickup"}
                       </Text>
                     </View>
                     <ShieldCheck size={18} color="#10B981" />
@@ -890,7 +1078,7 @@ export default function CollectorHome() {
                       { color: isDarkMode ? "#F9F9FF" : "#003527" },
                     ]}
                   >
-                    Confirm Payment Received
+                    {pickupStarted ? "Complete Pickup" : "Customer arrival confirmed"}
                   </Text>
 
                   <View
@@ -910,7 +1098,7 @@ export default function CollectorHome() {
                           { color: isDarkMode ? "#F9F9FF" : "#003527" },
                         ]}
                       >
-                        GH₵ 38.00 - MTN Mobile Money
+                        {pickupStarted ? "Finish collection" : "Four-minute wait is server-timed"}
                       </Text>
                       <Text
                         style={[
@@ -918,7 +1106,7 @@ export default function CollectorHome() {
                           { color: isDarkMode ? "#8E9A94" : "#718096" },
                         ]}
                       >
-                        Ref: #MM-892410 · Confirmed
+                        {pickupStarted ? "Mark this pickup complete when waste is loaded." : waitSeconds > 0 ? `${waitSeconds}s remaining` : "Waiting period complete — you can start pickup."}
                       </Text>
                     </View>
                   </View>
@@ -943,7 +1131,7 @@ export default function CollectorHome() {
                         { color: isDarkMode ? "#003527" : "#FFFFFF" },
                       ]}
                     >
-                      Confirm & Complete Pickup
+                        {pickupStarted ? "Complete Pickup" : "Start Pickup"}
                     </Text>
                   </TouchableOpacity>
                 </View>

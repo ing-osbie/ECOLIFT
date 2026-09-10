@@ -2,8 +2,13 @@ import type { WasteType } from "./order";
 
 export type JobStatus =
   | "pending"
+  | "offered"
   | "accepted"
   | "in_progress"
+  | "en_route"
+  | "arrived"
+  | "pickup_in_progress"
+  | "declined"
   | "completed"
   | "cancelled";
 
@@ -46,6 +51,14 @@ export interface CollectorJob {
   status: JobStatus;
   rating?: number | null;
   completed_at?: string | null;
+  offered_at?: string | null;
+  accepted_at?: string | null;
+  arrived_at?: string | null;
+  customer_name?: string | null;
+  customer_phone?: string | null;
+  pickup_lat?: number | null;
+  pickup_lng?: number | null;
+  bags_count?: number | null;
   created_at?: string;
   updated_at?: string;
 }

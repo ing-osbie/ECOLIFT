@@ -1289,6 +1289,11 @@ exception when others then null; end $$;
   values ('avatars', 'avatars', true)
   on conflict (id) do update set public = true;
 
+  drop policy if exists "Avatar images are publicly accessible" on storage.objects;
+  create policy "Avatar images are publicly accessible" on storage.objects
+  for select
+  using (bucket_id = 'avatars');
+
   drop policy if exists "Users can upload own avatars" on storage.objects;
   create policy "Users can upload own avatars" on storage.objects
   for insert to authenticated

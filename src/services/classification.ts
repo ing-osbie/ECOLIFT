@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { File } from "expo-file-system";
 import { Platform } from "react-native";
+import { supabase } from "@/src/lib/supabase";
 
 export type WasteCategory =
   | "plastic"
@@ -273,35 +274,117 @@ export const CATEGORY_METADATA_MAP: Record<WasteCategory, CategoryMetadata> = {
   },
 };
 
-const API_KEY_STORAGE_KEY = "@ecolift_gemini_api_key";
+// Supported Gemini multimodal vision models in preference order
+export const GEMINI_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+];
 
-// Active Google Generative Language Vision models in order of priority
-const GEMINI_MODELS = ["gemini-3.8-flash"];
+export const GEMINI_STORAGE_KEY = "@ecolift_gemini_api_key";
 
-/**
- * Retrieve the active Gemini API key from environment variable or local AsyncStorage
- */
 export async function getGeminiApiKey(): Promise<string> {
-  const envKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-  if (envKey && envKey.trim() !== "" && envKey !== "YOUR_API_KEY") {
-    return envKey.trim();
-  }
   try {
-    const stored = await AsyncStorage.getItem(API_KEY_STORAGE_KEY);
-    if (stored && stored.trim() !== "") {
+    const stored = await AsyncStorage.getItem(GEMINI_STORAGE_KEY);
+    if (stored && stored.trim()) {
       return stored.trim();
     }
-  } catch {
-    // Ignore storage read error
+  } catch (err) {
+    if (__DEV__) {
+      console.warn("[EcoLift AI] Failed reading Gemini key from AsyncStorage:", err);
+    }
+  }
+  const envKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+  if (envKey && envKey.trim()) {
+    return envKey.trim();
   }
   return "";
 }
 
-/**
- * Save a custom Gemini API key entered by the user
- */
+export async function getGeminiKeySource(): Promise<"storage" | "env" | "none"> {
+  try {
+    const stored = await AsyncStorage.getItem(GEMINI_STORAGE_KEY);
+    if (stored && stored.trim()) return "storage";
+  } catch {}
+  const envKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+  if (envKey && envKey.trim()) return "env";
+  return "none";
+}
+
 export async function setGeminiApiKey(key: string): Promise<void> {
-  await AsyncStorage.setItem(API_KEY_STORAGE_KEY, key.trim());
+  const trimmed = key ? key.trim() : "";
+  if (!trimmed) {
+    await AsyncStorage.removeItem(GEMINI_STORAGE_KEY);
+    return;
+  }
+  await AsyncStorage.setItem(GEMINI_STORAGE_KEY, trimmed);
+}
+
+export async function clearGeminiApiKey(): Promise<void> {
+  await AsyncStorage.removeItem(GEMINI_STORAGE_KEY);
+}
+
+/**
+ * Validates a Gemini API key by making a lightweight test query to the API
+ */
+export async function testGeminiApiKey(
+  apiKey: string,
+): Promise<{ success: boolean; error?: string }> {
+  const keyToTest = apiKey?.trim();
+  if (!keyToTest) {
+    return { success: false, error: "API key cannot be empty." };
+  }
+
+  let lastError = "Could not validate key.";
+
+  for (const model of GEMINI_MODELS) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(keyToTest)}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: "Respond with the word OK." }],
+            },
+          ],
+          generationConfig: {
+            maxOutputTokens: 10,
+            temperature: 0,
+          },
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        return { success: true };
+      }
+
+      const errJson = await res.json().catch(() => ({}));
+      const rawMessage =
+        errJson?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
+
+      if (res.status === 400 || res.status === 403) {
+        return { success: false, error: `Invalid API key: ${rawMessage}` };
+      }
+      if (res.status === 429) {
+        return { success: false, error: "Rate limit reached for this API key." };
+      }
+      lastError = rawMessage;
+    } catch (e: any) {
+      if (e?.name === "AbortError") {
+        return { success: false, error: "Request timed out while validating API key." };
+      }
+      lastError = e?.message || "Network error while connecting to Gemini API.";
+    }
+  }
+
+  return { success: false, error: lastError };
 }
 
 /**
@@ -373,51 +456,47 @@ export async function getImageBase64(imageUri: string): Promise<string> {
   }
 }
 
-const SYSTEM_PROMPT = `You are EcoLift's waste-material classification AI.
-Analyze the provided image carefully and classify the PRIMARY physical material or waste category of the main item visible.
+const SYSTEM_PROMPT = `You are EcoLift's precision waste-material classification AI.
+Analyze the provided image carefully and classify the PRIMARY physical material and waste category of the main visible item.
 
-CRITICAL INSTRUCTIONS:
-1. Identify the primary physical material, not just the object's shape.
-2. Examine texture, reflections, edges, construction, labels, components, and other visible evidence.
-3. Do not default to plastic. Phones, laptops, keyboards, chargers, cables, and circuit boards are "e_waste". Batteries, chemicals, paint, and bulbs are "hazardous".
-4. Use exactly one of these categories:
-   - "e_waste": Laptop, desktop computer, mobile phone, tablet, keyboard, mouse, monitor, television, printer, charger, cable, electronics
-   - "metal": Aluminium can, steel/tin food can, foil, scrap metal, metal lid
-   - "plastic": PET (#1), HDPE (#2), PVC (#3), LDPE (#4), PP (#5), PS (#6), Other plastics (#7)
-  - "paper": Paper, cardboard, paper bag, office paper, newspaper, books, carton
-   - "glass": Clear glass bottle/jar, brown glass, green glass container
-   - "organic": Food waste, fruit peels, vegetable scraps, plant trimmings
-   - "textiles": Clothing, fabric, shoes, towels, linens
-   - "hazardous": Batteries, chemical containers, paint, solvents, medical waste, light bulbs
-   - "non_waste": Humans, faces, living pets, vehicles, clean furniture in use, generic rooms
-   - "unknown": Unclear, blurry, unidentifiable objects
-5. If confidence is below 0.75, return category "unknown".
-6. Return confidence as a decimal from 0 to 1. Prefer "unknown" over guessing.
-7. Provide a short visual reason. Never invent details.
-8. Provide actionable, safety-accurate disposal advice.
-   - E-waste: "Take to an authorized e-waste collection center or drop-off kiosk. Do not place in curbside recycling bins."
-   - Batteries: "Take to a dedicated battery collection kiosk or hazardous waste depot. Never put in trash or curbside bins."
-   - Plastics/Metals/Glass/Paper: Provide accurate bin guidance (rinse, flatten, keep caps, etc.).
+CRITICAL INSTRUCTIONS & MATERIAL DISCRIMINATION:
+1. Identify the primary physical material, not just the object's general shape.
+2. Examine surface texture, reflections, seams, labels, threading, structural rigidity, components, and all visible evidence.
+3. STRICT CATEGORY RULES:
+   - PLASTIC BOTTLE vs. GLASS BOTTLE: Clear thin PET with molded recycling triangles, neck ridges, and lightweight flexibility is "plastic". Rigid silicate glass with characteristic refraction, thick weighted bottom, and glass seams is "glass".
+   - METAL CAN vs. PLASTIC CONTAINER: Metallic luster, crimped top/bottom rims, pull-tab lids, or tin-plated seams belong to "metal".
+   - PAPER vs. CARDBOARD: Both belong to category "paper". Use subCategory "cardboard" for fluted/corrugated boxes and cartons; use subCategory "paper" for office sheets, flyers, and magazines.
+   - E-WASTE vs. GENERIC PLASTIC OR METAL: Any electronic device (laptop, computer, tablet, smartphone, keyboard, mouse, monitor, power adapter, charger, USB cable, headphones, audio equipment, circuit board) MUST be classified as category "e_waste", NEVER generic "plastic" or "metal". Electronics contain hazardous components (lead, mercury) and valuable recoverable metals (gold, copper, lithium) requiring certified dismantling at e-waste depots.
+   - BATTERIES vs. GENERAL E-WASTE / TRASH: Batteries (alkaline AA/AAA/9V, lithium-ion pouch/cells, button cells) MUST be classified as category "hazardous". They cause explosive fires in standard recycling facilities and must NEVER be placed in curbside recycling or trash.
+   - ORGANIC vs. PACKAGING: Food scraps, vegetable peels, fruit waste, eggshells, coffee grounds, and compostable plant matter are category "organic", NOT recyclable waste.
+   - TEXTILES: Clothing, fabrics, shoes, towels, linens are category "textiles".
+   - NON-WASTE: Living animals/pets, people, faces, clean furniture in active use, vehicles, or outdoor scenery are "non_waste".
+   - UNKNOWN: Blurry, out-of-focus, occluded, or unidentifiable items must be classified as "unknown".
+4. HONEST CONFIDENCE SCORING:
+   - Provide a realistic decimal confidence between 0.00 and 1.00 (e.g. 0.94).
+   - If confidence is below 0.75 (75%), return category "unknown" and explain what visual detail is missing. Prefer "unknown" over hallucinating.
+5. DISPOSAL ADVICE:
+   - Provide safety-accurate, category-specific disposal advice. E.g. E-waste: "Take to an authorized e-waste drop-off kiosk or schedule an EcoLift collection. Do not place in household curbside bins." Batteries: "Take to a dedicated battery drop-off kiosk or hazardous waste center. Never put in trash or curbside recycling."
 
-Return ONLY valid JSON with this exact schema:
+Return ONLY valid JSON matching this schema:
 {
-  "name": "<Specific object name>",
+  "name": "<Specific object name, e.g. Clear PET Beverage Bottle, MacBook Pro Laptop, Aluminium Soda Can>",
   "item": "<Primary item>",
-  "objectType": "<e_waste|laptop|phone|keyboard|bottle|can|box|battery|clothing|fruit|etc>",
-  "material": "<Specific Material, e.g. Aluminum Chassis & PCBs, PET #1, Aluminium 3004, Corrugated Kraft Paper>",
+  "objectType": "<bottle|can|box|laptop|phone|keyboard|battery|clothing|food_waste|cable|appliance|etc>",
+  "material": "<Specific Material, e.g. Polyethylene Terephthalate (PET #1), Aluminium Alloy 3004, Corrugated Kraft Cardboard, Circuit Boards & Aluminium Chassis, Zinc-Manganese Alkaline>",
   "category": "<e_waste|metal|plastic|paper|glass|organic|textiles|hazardous|non_waste|unknown|other>",
-  "subCategory": "<e.g. laptop, aluminium, pet_1, cardboard, clear_glass, food_waste, clothing, battery>",
-  "confidence": <number 0-1>,
+  "subCategory": "<e.g. pet_1, aluminium, steel, cardboard, paper, clear_glass, laptop, mobile_phone, keyboard, battery, food_waste, clothing>",
+  "confidence": <number 0.0 to 1.0>,
   "recyclable": <boolean>,
   "isWaste": <boolean>,
   "estimatedWeightGrams": <number>,
   "co2SavingsKg": <number>,
-  "ecoPoints": <integer>,
-  "tips": ["<Preparation tip 1>", "<Preparation tip 2>", "<Preparation tip 3>"],
-  "reason": "<Visible evidence supporting the material classification>",
-  "disposalRecommendation": "<Clear, category-appropriate disposal instruction>",
+  "ecoPoints": <integer 0 to 50>,
+  "tips": ["<Actionable preparation tip 1>", "<Actionable preparation tip 2>", "<Actionable preparation tip 3>"],
+  "reason": "<Visible physical features justifying this classification>",
+  "disposalRecommendation": "<Accurate, safe disposal recommendation>",
   "alternatives": [
-    { "label": "<Alternative object name>", "category": "<category>", "confidence": <integer 0-100> }
+    { "label": "<Alternative candidate>", "category": "<category>", "confidence": <integer 0-100> }
   ]
 }`;
 
@@ -640,6 +719,143 @@ export function enrichClassificationResult(
  * Classifies an image using Google Gemini Vision AI,
  * enforcing honest confidence calculation, confidence thresholding, and safe offline handling.
  */
+/**
+ * Safely parses raw Gemini response text into a JSON object, stripping markdown fences
+ * and locating outermost JSON brackets if preamble or postamble text exists.
+ */
+export function parseGeminiJsonResponse(
+  rawText: string,
+): Record<string, unknown> | null {
+  if (!rawText || typeof rawText !== "string") return null;
+
+  // 1. Strip markdown fences if present
+  const cleaned = rawText
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    // 2. Try to locate outermost json braces if extraneous text was returned
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      try {
+        return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+/**
+ * Direct call to Google Generative Language REST API for Gemini Vision
+ */
+export async function callGeminiVisionDirect(
+  base64: string,
+  mimeType: string,
+  apiKey: string,
+  model: string,
+): Promise<{
+  success: boolean;
+  data?: any;
+  error?: string;
+  errorCode?: ClassificationErrorCode;
+}> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: SYSTEM_PROMPT },
+              {
+                inlineData: {
+                  mimeType: mimeType || "image/jpeg",
+                  data: base64,
+                },
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 1024,
+          responseMimeType: "application/json",
+        },
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    const json = await res.json().catch(() => ({}));
+
+    if (res.ok) {
+      return { success: true, data: json };
+    }
+
+    const errMessage =
+      json?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
+
+    if (res.status === 400) {
+      const lower = errMessage.toLowerCase();
+      if (lower.includes("key") || lower.includes("api_key")) {
+        return { success: false, error: errMessage, errorCode: "INVALID_API_KEY" };
+      }
+      return { success: false, error: errMessage, errorCode: "INVALID_IMAGE" };
+    }
+    if (res.status === 403) {
+      return { success: false, error: errMessage, errorCode: "INVALID_API_KEY" };
+    }
+    if (res.status === 429) {
+      return {
+        success: false,
+        error: "Gemini rate limit exceeded. Please wait a moment and retry.",
+        errorCode: "RATE_LIMIT",
+      };
+    }
+    if (res.status === 404) {
+      return {
+        success: false,
+        error: `Model ${model} not found or unsupported.`,
+        errorCode: "SERVER_ERROR",
+      };
+    }
+
+    return { success: false, error: errMessage, errorCode: "SERVER_ERROR" };
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err?.name === "AbortError") {
+      return {
+        success: false,
+        error: "Gemini vision analysis timed out.",
+        errorCode: "TIMEOUT",
+      };
+    }
+    return {
+      success: false,
+      error: err?.message || "Network error connecting to Gemini AI.",
+      errorCode: "NO_INTERNET",
+    };
+  }
+}
+
+/**
+ * Classifies an image using Google Gemini Vision AI with multi-tier fallback:
+ * Tier 1: Supabase Edge Function (classify-waste)
+ * Tier 2: Direct Google Gemini REST API
+ * Tier 3: Diagnostic guidance for missing API key or connectivity
+ */
 export async function classifyWasteImage(
   imageUri: string,
   preloadedBase64?: string,
@@ -657,14 +873,6 @@ export async function classifyWasteImage(
     return getClassificationErrorResult(
       "INVALID_IMAGE",
       "No readable image was provided.",
-    );
-  }
-
-  const apiKey = await getGeminiApiKey();
-  if (!apiKey) {
-    return getClassificationErrorResult(
-      "MISSING_API_KEY",
-      "No Gemini API key is configured.",
     );
   }
 
@@ -689,98 +897,80 @@ export async function classifyWasteImage(
     }
   }
 
-  // 4. Try candidate Gemini models (Requirement 9)
-  let lastError: unknown = null;
+  // Sanitize base64 string
+  base64 = base64.replace(/\s+/g, "");
 
+  // 3. Attempt Tier 1: Supabase Edge Function ("classify-waste") if online and configured
+  let edgeError: any = null;
   for (const model of GEMINI_MODELS) {
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-
       const requestPayload = {
-        contents: [
-          {
-            parts: [
-              { text: SYSTEM_PROMPT },
-              {
-                inlineData: {
-                  mimeType,
-                  data: base64,
-                },
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 1024,
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "OBJECT",
-            properties: {
-              name: { type: "STRING" },
-              item: { type: "STRING" },
-              objectType: { type: "STRING" },
-              material: { type: "STRING" },
-              category: { type: "STRING" },
-              confidence: { type: "NUMBER" },
-              recyclable: { type: "BOOLEAN" },
-              isWaste: { type: "BOOLEAN" },
-              reason: { type: "STRING" },
-              disposalRecommendation: { type: "STRING" },
-              tips: { type: "ARRAY", items: { type: "STRING" } },
-              alternatives: { type: "ARRAY", items: { type: "OBJECT" } },
-            },
-            required: [
-              "name",
-              "item",
-              "material",
-              "category",
-              "confidence",
-              "recyclable",
-              "reason",
-            ],
-          },
-        },
+        imageBase64: base64,
+        mimeType,
+        prompt: SYSTEM_PROMPT,
+        model,
       };
+      const { data: json, error } = await supabase.functions.invoke(
+        "classify-waste",
+        { body: requestPayload },
+      );
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout
-
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestPayload),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errBody = await response.text();
-        if (__DEV__) {
-          console.info(
-            `[EcoLift AI] Model ${model} returned HTTP ${response.status}: ${errBody.slice(0, 180)}`,
-          );
+      if (!error && json) {
+        const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) {
+          const parsed = parseGeminiJsonResponse(text);
+          if (parsed && typeof parsed.category === "string") {
+            const finalResult = enrichClassificationResult(
+              parsed,
+              `Gemini Vision (${model} / Cloud)`,
+            );
+            if (__DEV__) {
+              console.log(
+                "[EcoLift AI] Classification succeeded via Supabase Edge Function:",
+                finalResult.name,
+              );
+            }
+            return finalResult;
+          }
         }
-        const code: ClassificationErrorCode =
-          response.status === 400 ||
-          response.status === 401 ||
-          response.status === 403
-            ? "INVALID_API_KEY"
-            : response.status === 429
-              ? "RATE_LIMIT"
-              : response.status >= 500
-                ? "SERVER_ERROR"
-                : "UNKNOWN_ERROR";
-        return getClassificationErrorResult(
-          code,
-          `Gemini request failed with status ${response.status}.`,
-        );
+      } else {
+        edgeError = error;
       }
+    } catch (edgeEx: any) {
+      edgeError = edgeEx;
+    }
+    // Only test first model on edge function to avoid slow repeated round-trips if edge function is un-deployed
+    break;
+  }
 
-      const json = await response.json();
-      const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (__DEV__ && edgeError) {
+    console.info(
+      "[EcoLift AI] Edge function unavailable, falling back to direct client Gemini:",
+      edgeError?.message || edgeError,
+    );
+  }
 
+  // 4. Tier 2: Direct Gemini Generative Language REST API Fallback
+  const apiKey = await getGeminiApiKey();
+  if (!apiKey) {
+    if (__DEV__) {
+      console.warn(
+        "[EcoLift AI] No Gemini API key found. Prompting user to configure key.",
+      );
+    }
+    return getClassificationErrorResult(
+      "MISSING_API_KEY",
+      "A Google Gemini API key is required to identify waste. Tap 'Configure API Key' to enter your key or set EXPO_PUBLIC_GEMINI_API_KEY in .env.",
+    );
+  }
+
+  let lastDirectError: { error?: string; errorCode?: ClassificationErrorCode } | null = null;
+
+  for (const model of GEMINI_MODELS) {
+    const directResult = await callGeminiVisionDirect(base64, mimeType, apiKey, model);
+
+    if (directResult.success && directResult.data) {
+      const text = directResult.data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!text) {
         return getClassificationErrorResult(
           "INVALID_AI_RESPONSE",
@@ -788,27 +978,11 @@ export async function classifyWasteImage(
         );
       }
 
-      const cleaned = text
-        .replace(/^```(?:json)?\s*/i, "")
-        .replace(/\s*```$/i, "")
-        .trim();
-      let parsed: Record<string, unknown>;
-      try {
-        parsed = JSON.parse(cleaned) as Record<string, unknown>;
-      } catch {
+      const parsed = parseGeminiJsonResponse(text);
+      if (!parsed || typeof parsed.category !== "string") {
         return getClassificationErrorResult(
           "INVALID_AI_RESPONSE",
-          "Gemini returned malformed JSON.",
-        );
-      }
-
-      if (
-        typeof parsed.category !== "string" ||
-        typeof parsed.confidence !== "number"
-      ) {
-        return getClassificationErrorResult(
-          "INVALID_AI_RESPONSE",
-          "Gemini returned an incomplete classification.",
+          "Gemini returned malformed classification JSON.",
         );
       }
 
@@ -817,7 +991,6 @@ export async function classifyWasteImage(
         `Gemini Vision (${model})`,
       );
 
-      // Debug logging (Requirement 12)
       if (__DEV__) {
         console.log("--- EcoLift AI Classification Debug ---");
         console.log("IMAGE URI:", imageUri);
@@ -825,7 +998,6 @@ export async function classifyWasteImage(
         console.log("IMAGE SIZE:", `${base64.length} base64 chars`);
         console.log("IMAGE MIME TYPE:", mimeType);
         console.log("CLASSIFICATION REQUEST START:", reqStartTime);
-        console.log("MODEL RESPONSE:", cleaned.slice(0, 200) + "...");
         console.log("TOP PREDICTION:", finalResult.name);
         console.log(
           "CONFIDENCE:",
@@ -840,45 +1012,28 @@ export async function classifyWasteImage(
       }
 
       return finalResult;
-    } catch (modelErr: unknown) {
-      lastError = modelErr;
-      if (modelErr instanceof DOMException && modelErr.name === "AbortError") {
+    } else {
+      lastDirectError = directResult;
+      // If error is invalid API key or rate limit, fail fast instead of hammering other models
+      if (
+        directResult.errorCode === "INVALID_API_KEY" ||
+        directResult.errorCode === "RATE_LIMIT"
+      ) {
         return getClassificationErrorResult(
-          "TIMEOUT",
-          "Gemini took too long to respond.",
-        );
-      }
-      if (__DEV__) {
-        console.info(
-          `[EcoLift AI] Error invoking model ${model}:`,
-          modelErr instanceof Error ? modelErr.message : modelErr,
+          directResult.errorCode,
+          directResult.error || "Gemini API key error.",
         );
       }
     }
   }
 
-  // If all models failed or network error
-  if (__DEV__) {
-    console.log("--- EcoLift AI Classification Debug ---");
-    console.log("IMAGE URI:", imageUri);
-    console.log("MODEL: Gemini Vision (All models failed)");
-    console.log("IMAGE SIZE:", `${base64.length} base64 chars`);
-    console.log("IMAGE MIME TYPE:", mimeType);
-    console.log("CLASSIFICATION REQUEST START:", reqStartTime);
-    console.log(
-      "MODEL RESPONSE: Network/API call failure:",
-      lastError instanceof Error ? lastError.message : lastError,
-    );
-    console.log("TOP PREDICTION: Unable to identify item");
-    console.log("CONFIDENCE: 0% (low)");
-    console.log("ALTERNATIVE PREDICTIONS: []");
-    console.log("FINAL CLASSIFICATION: unknown");
-    console.log("---------------------------------------");
-  }
+  // If all candidate models failed
+  const finalCode = lastDirectError?.errorCode || "SERVER_ERROR";
+  const finalMessage =
+    lastDirectError?.error ||
+    "Gemini could not complete the image analysis. Please retry or retake the photo.";
 
-  const message =
-    lastError instanceof Error ? lastError.message : "Network request failed.";
-  return getClassificationErrorResult("NO_INTERNET", message);
+  return getClassificationErrorResult(finalCode, finalMessage);
 }
 
 // ============================================================================

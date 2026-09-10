@@ -5,8 +5,11 @@ import { useAuth } from "@/src/context/AuthContext";
 import {
     ClassificationResult,
     classifyWasteImage,
+    clearGeminiApiKey,
     getGeminiApiKey,
+    getGeminiKeySource,
     setGeminiApiKey,
+    testGeminiApiKey,
 } from "@/src/services/classification";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
@@ -15,6 +18,9 @@ import {
     Camera,
     Check,
     CircleAlert,
+    ExternalLink,
+    Eye,
+    EyeOff,
     Focus,
     Image as ImageIcon,
     Leaf,
@@ -23,15 +29,18 @@ import {
     RotateCcw,
     Scale,
     Sparkles,
+    Trash2,
     X,
     Zap,
     ZapOff,
 } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
+    ActivityIndicator,
     Animated,
     Dimensions,
     Image,
+    Linking,
     Modal,
     StyleSheet,
     Text,
@@ -87,51 +96,118 @@ export default function ClassifyScreen() {
     useState<ClassificationResult | null>(null);
   const activeRequestIdRef = useRef<string>("");
 
-  // Gemini API Key management modal
+  // Gemini API Key management modal state
   const [apiKeyModalVisible, setApiKeyModalVisible] = useState<boolean>(false);
   const [apiKeyInput, setApiKeyInput] = useState<string>("");
-  const [activeApiKey, setActiveApiKey] = useState<string>("");
-  const [isKeySaving, setIsKeySaving] = useState<boolean>(false);
+  const [showApiKeyText, setShowApiKeyText] = useState<boolean>(false);
+  const [isTestingKey, setIsTestingKey] = useState<boolean>(false);
+  const [keySource, setKeySource] = useState<"storage" | "env" | "none">("none");
+
+  const refreshKeyStatus = async () => {
+    try {
+      const source = await getGeminiKeySource();
+      setKeySource(source);
+      if (source === "storage") {
+        const key = await getGeminiApiKey();
+        setApiKeyInput(key);
+      } else if (source === "none") {
+        setApiKeyInput("");
+      }
+    } catch (e) {
+      if (__DEV__) console.warn("Failed loading Gemini key source:", e);
+    }
+  };
+
+  useEffect(() => {
+    refreshKeyStatus();
+  }, []);
+
+  useEffect(() => {
+    if (apiKeyModalVisible) {
+      refreshKeyStatus();
+    }
+  }, [apiKeyModalVisible]);
+
+  const handleSaveKey = async () => {
+    const trimmed = apiKeyInput.trim();
+    if (!trimmed) {
+      showAlert({
+        type: "error",
+        title: "API Key Required",
+        message: "Please enter a valid Google Gemini API key.",
+      });
+      return;
+    }
+
+    setIsTestingKey(true);
+    try {
+      const testResult = await testGeminiApiKey(trimmed);
+      if (!testResult.success) {
+        showAlert({
+          type: "error",
+          title: "Validation Failed",
+          message:
+            testResult.error ||
+            "The provided Gemini API key could not be validated with Google API.",
+        });
+        setIsTestingKey(false);
+        return;
+      }
+
+      await setGeminiApiKey(trimmed);
+      setKeySource("storage");
+      setIsTestingKey(false);
+      setApiKeyModalVisible(false);
+
+      showAlert({
+        type: "success",
+        title: "API Key Configured!",
+        message: "Gemini Vision AI is active and ready to classify waste items.",
+      });
+
+      // If active image was waiting or errored due to missing key, automatically re-classify
+      if (
+        activeImageUri &&
+        (currentResult?.errorCode === "MISSING_API_KEY" ||
+          scanStatus === "offline" ||
+          scanStatus === "error")
+      ) {
+        performClassification(activeImageUri);
+      }
+    } catch (err: any) {
+      setIsTestingKey(false);
+      showAlert({
+        type: "error",
+        title: "Error Saving Key",
+        message:
+          err?.message || "An unexpected error occurred while saving the key.",
+      });
+    }
+  };
+
+  const handleClearKey = async () => {
+    try {
+      await clearGeminiApiKey();
+      setApiKeyInput("");
+      await refreshKeyStatus();
+      showAlert({
+        type: "info",
+        title: "Key Removed",
+        message: "Custom Gemini API key has been cleared from local storage.",
+      });
+    } catch (err: any) {
+      showAlert({
+        type: "error",
+        title: "Error",
+        message: err?.message || "Could not clear the stored API key.",
+      });
+    }
+  };
 
   // Animations
   const [scanLineAnim] = useState(() => new Animated.Value(0));
   const [boxOpacityAnim] = useState(() => new Animated.Value(1));
   const [resultCardAnim] = useState(() => new Animated.Value(1));
-
-  // Load active Gemini key
-  useEffect(() => {
-    (async () => {
-      const key = await getGeminiApiKey();
-      setActiveApiKey(key);
-      setApiKeyInput(key);
-    })();
-  }, []);
-
-  // Save API key
-  const handleSaveApiKey = async () => {
-    try {
-      setIsKeySaving(true);
-      await setGeminiApiKey(apiKeyInput.trim());
-      const updated = await getGeminiApiKey();
-      setActiveApiKey(updated);
-      setApiKeyModalVisible(false);
-      showAlert({
-        type: "success",
-        title: "AI Key Configured",
-        message: updated
-          ? "Gemini 3.8 Flash Vision AI is active for high-precision detection."
-          : "API key cleared. Configure Gemini before analyzing waste.",
-      });
-    } catch {
-      showAlert({
-        type: "error",
-        title: "Save Failed",
-        message: "Could not save API key to local storage.",
-      });
-    } finally {
-      setIsKeySaving(false);
-    }
-  };
 
   /**
    * Starts precision classification pipeline on an image URI with request ID tracking
@@ -429,10 +505,16 @@ export default function ClassifyScreen() {
                 onPress={() => setApiKeyModalVisible(true)}
                 activeOpacity={0.8}
               >
-                <Sparkles size={18} color={activeApiKey ? "#10B981" : C.text} />
-                {Boolean(activeApiKey) && (
-                  <View style={styles.activeKeyIndicatorDot} />
-                )}
+                <Sparkles size={18} color="#10B981" />
+                <View
+                  style={[
+                    styles.activeKeyIndicatorDot,
+                    {
+                      backgroundColor:
+                        keySource !== "none" ? "#10B981" : "#F59E0B",
+                    },
+                  ]}
+                />
               </TouchableOpacity>
 
               {/* Flash Toggle */}
@@ -904,8 +986,8 @@ export default function ClassifyScreen() {
                     >
                       <Text style={styles.primaryLogBtnText}>
                         {currentResult.errorCode === "MISSING_API_KEY"
-                          ? "Configure AI"
-                          : "Retry"}
+                          ? "Configure API Key"
+                          : "Retry Analysis"}
                       </Text>
                     </TouchableOpacity>
 
@@ -1149,87 +1231,135 @@ export default function ClassifyScreen() {
                 <TouchableOpacity
                   onPress={() => setApiKeyModalVisible(false)}
                   style={styles.modalCloseBtn}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <X size={20} color={C.greyText} />
                 </TouchableOpacity>
               </View>
 
+              {/* Engine Status Badge */}
               <View
                 style={[
                   styles.modalEngineStatusBox,
                   {
-                    backgroundColor: activeApiKey
-                      ? "rgba(16, 185, 129, 0.12)"
-                      : "rgba(245, 158, 11, 0.12)",
+                    backgroundColor:
+                      keySource === "none"
+                        ? "rgba(245, 158, 11, 0.12)"
+                        : "rgba(16, 185, 129, 0.12)",
                   },
                 ]}
               >
                 <View
                   style={[
                     styles.statusDot,
-                    { backgroundColor: activeApiKey ? "#10B981" : "#F59E0B" },
+                    {
+                      backgroundColor:
+                        keySource === "none" ? "#F59E0B" : "#10B981",
+                    },
                   ]}
                 />
                 <Text
                   style={[
                     styles.engineStatusText,
-                    { color: activeApiKey ? "#10B981" : "#D97706" },
+                    {
+                      color: keySource === "none" ? "#F59E0B" : "#10B981",
+                    },
                   ]}
                 >
-                  {activeApiKey
-                    ? "Connected: Gemini 3.8 Flash Vision"
-                    : "Running: Offline Heuristics Engine"}
+                  {keySource === "env"
+                    ? "Active (Configured via .env)"
+                    : keySource === "storage"
+                      ? "Active (Custom Key Saved)"
+                      : "API Key Required"}
                 </Text>
               </View>
 
               <Text style={[styles.modalDescription, { color: C.greyText }]}>
-                To enable 99.8% precision material detection, enter your free
-                Google Gemini API Key from Google AI Studio
-                (aistudio.google.com).
+                {keySource === "env"
+                  ? "EcoLift is using the API key defined in your environment (.env). You can override it with a custom key below."
+                  : "EcoLift uses Google Gemini Vision to accurately classify recyclable materials, e-waste, and hazard levels. Enter your Gemini API key below."}
               </Text>
 
-              <TextInput
-                style={[
-                  styles.apiKeyTextInput,
-                  {
-                    color: C.text,
-                    borderColor: isDarkMode ? "#34423C" : "#DCE2F3",
-                    backgroundColor: isDarkMode ? "#121715" : "#F9F9FF",
-                  },
-                ]}
-                placeholder="AIzaSy..."
-                placeholderTextColor={C.greyText}
-                value={apiKeyInput}
-                onChangeText={setApiKeyInput}
-                autoCapitalize="none"
-                autoCorrect={false}
-                secureTextEntry={false}
-              />
-
-              <View style={styles.modalActionsRow}>
+              {/* Key Input Field with Eye Toggle */}
+              <View style={styles.inputContainerRow}>
+                <TextInput
+                  style={[
+                    styles.apiKeyTextInput,
+                    {
+                      backgroundColor: isDarkMode ? "#121715" : "#F3F4F6",
+                      borderColor: isDarkMode ? "#2D3732" : "#E5E7EB",
+                      color: C.text,
+                    },
+                  ]}
+                  value={apiKeyInput}
+                  onChangeText={setApiKeyInput}
+                  placeholder="Paste Gemini API key (AIzaSy...)"
+                  placeholderTextColor={C.greyText}
+                  secureTextEntry={!showApiKeyText}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isTestingKey}
+                />
                 <TouchableOpacity
-                  style={[styles.saveKeyBtn, { backgroundColor: "#003527" }]}
-                  onPress={handleSaveApiKey}
-                  disabled={isKeySaving}
-                  activeOpacity={0.85}
+                  style={styles.eyeIconButton}
+                  onPress={() => setShowApiKeyText(!showApiKeyText)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Text style={styles.saveKeyBtnText}>
-                    {isKeySaving ? "Saving..." : "Save Key"}
-                  </Text>
+                  {showApiKeyText ? (
+                    <EyeOff size={18} color={C.greyText} />
+                  ) : (
+                    <Eye size={18} color={C.greyText} />
+                  )}
                 </TouchableOpacity>
+              </View>
 
-                {Boolean(activeApiKey) && (
+              {/* Get API Key link */}
+              <TouchableOpacity
+                style={styles.getApiKeyRow}
+                onPress={() => {
+                  Linking.openURL("https://aistudio.google.com/app/apikey").catch(() => {});
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.getApiKeyText, { color: isDarkMode ? "#95D3BA" : "#003527" }]}>
+                  Get a free Gemini key at Google AI Studio
+                </Text>
+                <ExternalLink size={12} color={isDarkMode ? "#95D3BA" : "#003527"} />
+              </TouchableOpacity>
+
+              {/* Modal Actions */}
+              <View style={styles.modalActionsRow}>
+                {keySource === "storage" && (
                   <TouchableOpacity
                     style={styles.clearKeyBtn}
-                    onPress={() => {
-                      setApiKeyInput("");
-                      handleSaveApiKey();
-                    }}
+                    onPress={handleClearKey}
+                    disabled={isTestingKey}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.clearKeyBtnText}>Clear Key</Text>
+                    <Trash2 size={16} color="#EF4444" />
                   </TouchableOpacity>
                 )}
+
+                <TouchableOpacity
+                  style={[
+                    styles.saveKeyBtn,
+                    {
+                      backgroundColor: "#003527",
+                      opacity: isTestingKey ? 0.7 : 1,
+                    },
+                  ]}
+                  onPress={handleSaveKey}
+                  disabled={isTestingKey}
+                  activeOpacity={0.85}
+                >
+                  {isTestingKey ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.saveKeyBtnText}>
+                      Test & Save Key
+                    </Text>
+                  )}
+                </TouchableOpacity>
               </View>
             </View>
           </View>
@@ -1745,14 +1875,35 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 14,
   },
+  inputContainerRow: {
+    position: "relative",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
   apiKeyTextInput: {
     height: 48,
     borderRadius: 12,
     borderWidth: 1,
-    paddingHorizontal: 14,
+    paddingLeft: 14,
+    paddingRight: 44,
     fontSize: 13,
     fontFamily: "Poppins-Medium",
+  },
+  eyeIconButton: {
+    position: "absolute",
+    right: 14,
+    top: 14,
+  },
+  getApiKeyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     marginBottom: 16,
+    paddingHorizontal: 2,
+  },
+  getApiKeyText: {
+    fontSize: 11,
+    fontFamily: "Poppins-Medium",
   },
   modalActionsRow: {
     flexDirection: "row",
@@ -1772,7 +1923,7 @@ const styles = StyleSheet.create({
   },
   clearKeyBtn: {
     height: 44,
-    paddingHorizontal: 16,
+    width: 44,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",

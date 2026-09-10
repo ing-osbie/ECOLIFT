@@ -158,7 +158,43 @@ export async function uploadAvatar(
     });
 
   if (uploadError) {
-    console.error("Supabase avatar upload error:", uploadError);
+    console.warn("Supabase avatar storage error:", uploadError);
+    if (
+      (uploadError as any)?.message?.toLowerCase().includes("bucket not found") ||
+      (uploadError as any)?.error === "Bucket not found" ||
+      (uploadError as any)?.statusCode === 404 ||
+      (uploadError as any)?.statusCode === "404"
+    ) {
+      // Fallback: If 'avatars' storage bucket is not created yet, store base64 Data URI
+      // directly on the user profile so photo upload always succeeds.
+      try {
+        let base64Data: string;
+        try {
+          const legacyFs = await import("expo-file-system/legacy");
+          base64Data = await legacyFs.readAsStringAsync(fileUri, {
+            encoding: legacyFs.EncodingType.Base64,
+          });
+        } catch {
+          const response = await fetch(fileUri);
+          const blob = await response.blob();
+          base64Data = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const res = reader.result as string;
+              resolve(res.includes(",") ? res.split(",")[1] : res);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        }
+
+        const finalDataUri = `data:${mimeType};base64,${base64Data}`;
+        await updateProfile({ avatar_url: finalDataUri });
+        return finalDataUri;
+      } catch (fallbackErr) {
+        console.warn("Avatar base64 fallback error:", fallbackErr);
+      }
+    }
     throw uploadError;
   }
 

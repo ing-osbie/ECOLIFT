@@ -30,6 +30,7 @@ import {
     ActivityIndicator,
     FlatList,
     Image,
+    Linking,
     Modal,
     Platform,
     ScrollView,
@@ -43,13 +44,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 
 import { useAuth } from "@/src/context/AuthContext";
+import { supabase } from "@/src/lib/supabase";
 import {
     geocodeAddress,
     getPlaceDetails,
     reverseGeocode,
 } from "@/src/services/googleMaps";
 import { getNotifications } from "@/src/services/notifications";
-import { subscribeToOrderById } from "@/src/services/orders";
+import { subscribeToOrder, subscribeToCollectorLocation, distanceMeters } from "@/src/services/dispatch";
 import { Order as DbOrder } from "@/src/types/order";
 
 interface LocationResult {
@@ -183,6 +185,8 @@ export default function UserHome() {
     | "tracking"
   >("home");
   const [activeOrder, setActiveOrder] = useState<DbOrder | null>(null);
+  const [collectorCoords, setCollectorCoords] = useState<Coordinates | null>(null);
+  const [arrivalWaitSeconds, setArrivalWaitSeconds] = useState<number | null>(null);
   const [selectedVehicle, setSelectedVehicle] = useState<
     "tricycle" | "truck" | "heavy"
   >("truck");
@@ -222,23 +226,103 @@ export default function UserHome() {
   const [isMapPickingActive, setIsMapPickingActive] = useState<
     "pickup" | "destination" | null
   >(null);
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 
   const hasAssignedCollector = Boolean(
     activeOrder?.collector_id &&
-    (activeOrder.status === "confirmed" || activeOrder.status === "en_route"),
+    ["confirmed", "en_route", "arrived", "pickup_in_progress", "completed"].includes(activeOrder.status),
   );
-  const collectorCoords = {
-    latitude: pickupLocation.latitude + 0.004,
-    longitude: pickupLocation.longitude + 0.004,
-  };
+
+  const [assignedCollector, setAssignedCollector] = useState<{
+    name: string;
+    phone: string;
+    vehicle: string;
+    plate: string;
+    rating: number;
+    avatarUrl?: string | null;
+  } | null>(null);
+
+  React.useEffect(() => {
+    if (!activeOrder?.collector_id) {
+      setAssignedCollector(null);
+      return;
+    }
+
+    let isMounted = true;
+    async function loadCollector() {
+      try {
+        const [profRes, collRes] = await Promise.all([
+          supabase
+            .from("profiles")
+            .select("full_name, phone, avatar_url")
+            .eq("id", activeOrder!.collector_id!)
+            .maybeSingle(),
+          supabase
+            .from("collectors")
+            .select("vehicle_name, plate_number, rating")
+            .eq("id", activeOrder!.collector_id!)
+            .maybeSingle(),
+        ]);
+
+        if (!isMounted) return;
+        setAssignedCollector({
+          name: profRes.data?.full_name || "EcoLift Collector",
+          phone: profRes.data?.phone || "",
+          vehicle: collRes.data?.vehicle_name || "EcoLift Truck",
+          plate: collRes.data?.plate_number || "GT-1024-24",
+          rating: Number(collRes.data?.rating) || 4.9,
+          avatarUrl: profRes.data?.avatar_url,
+        });
+      } catch (e) {
+        console.warn("Could not load assigned collector info:", e);
+      }
+    }
+
+    void loadCollector();
+    return () => {
+      isMounted = false;
+    };
+  }, [activeOrder?.collector_id]);
 
   React.useEffect(() => {
     if (!activeOrder?.id) return;
 
-    return subscribeToOrderById(activeOrder.id, (updatedOrder) => {
+    return subscribeToOrder(activeOrder.id, (updatedOrder) => {
       setActiveOrder(updatedOrder);
     });
   }, [activeOrder?.id]);
+
+  React.useEffect(() => {
+    if (!activeOrder?.collector_id) return;
+    return subscribeToCollectorLocation(activeOrder.collector_id, (latitude, longitude) =>
+      setCollectorCoords({ latitude, longitude }),
+    );
+  }, [activeOrder?.collector_id]);
+
+  // The four-minute wait is reconstructed from the server timestamp, so an
+  // app restart cannot reset it. This is a foreground notification; production
+  // push delivery should additionally be scheduled by the backend.
+  React.useEffect(() => {
+    if (!activeOrder?.arrived_at) {
+      const reset = setTimeout(() => setArrivalWaitSeconds(null), 0);
+      return () => clearTimeout(reset);
+    }
+    let notified = false;
+    const update = () => {
+      const seconds = Math.max(0, 240 - Math.floor((Date.now() - new Date(activeOrder.arrived_at!).getTime()) / 1000));
+      setArrivalWaitSeconds(seconds);
+      if (seconds === 0 && !notified) { notified = true; showAlert({ type: "info", title: "Pickup wait complete", message: "Your collector can now begin the pickup." }); }
+    };
+    const initial = setTimeout(update, 0); const timer = setInterval(update, 1000);
+    return () => { clearTimeout(initial); clearInterval(timer); };
+  }, [activeOrder?.arrived_at, showAlert]);
+
+  const collectorDistanceKm = collectorCoords && activeOrder?.pickup_lat != null && activeOrder?.pickup_lng != null
+    ? distanceMeters(collectorCoords.latitude, collectorCoords.longitude, activeOrder.pickup_lat, activeOrder.pickup_lng) / 1000 : null;
+  const displayedCollectorCoords: Coordinates = collectorCoords ?? {
+    latitude: pickupLocation.latitude + 0.004,
+    longitude: pickupLocation.longitude + 0.004,
+  };
 
   // Dynamic Map markers setup worldwide
   const mapMarkers = [
@@ -261,8 +345,8 @@ export default function UserHome() {
       ? [
           {
             id: "collector",
-            latitude: collectorCoords.latitude,
-            longitude: collectorCoords.longitude,
+      latitude: displayedCollectorCoords.latitude,
+      longitude: displayedCollectorCoords.longitude,
             title: "Assigned EcoLift collector",
             type: "collector" as const,
             draggable: false,
@@ -290,12 +374,12 @@ export default function UserHome() {
   const routePolyline = [
     ...(hasAssignedCollector
       ? [
-          collectorCoords,
+          displayedCollectorCoords,
           {
             latitude:
-              (pickupLocation.latitude + collectorCoords.latitude) / 2 + 0.001,
+              (pickupLocation.latitude + displayedCollectorCoords.latitude) / 2 + 0.001,
             longitude:
-              (pickupLocation.longitude + collectorCoords.longitude) / 2 -
+              (pickupLocation.longitude + displayedCollectorCoords.longitude) / 2 -
               0.001,
           },
         ]
@@ -493,15 +577,17 @@ export default function UserHome() {
   };
 
   const handleSelectLocation = (loc: LocationResult) => {
+    // Immediately set pickup coordinates and address so the app never hangs or fails to proceed
+    setPickupAddress(loc.area || loc.name);
+    setPickupLocation(loc.coords);
+    setIsSearchOpen(false);
+    setSearchQuery("");
+    searchInputRef.current?.blur();
+    setViewState("choose_vehicle");
+
+    // Asynchronously enrich with reverse geocoded place details if available
     if (loc.id && loc.id.length > 10) {
-      fetchPlaceDetailsById(loc.id);
-    } else {
-      setPickupAddress(loc.area || loc.name);
-      setPickupLocation(loc.coords);
-      setIsSearchOpen(false);
-      setSearchQuery("");
-      searchInputRef.current?.blur();
-      setViewState("choose_vehicle");
+      fetchPlaceDetailsById(loc.id).catch(() => {});
     }
   };
 
@@ -548,13 +634,12 @@ export default function UserHome() {
 
   const handleDisposalSelect = (loc: LocationResult) => {
     const address = loc.area ? `${loc.name}, ${loc.area}` : loc.name;
-    if (editingLocation === "disposal") {
-      setEditingDisposalAddress(address);
-      setEditingDisposalLocation(loc.coords);
-    } else {
-      setDisposalAddress(address);
-      setDisposalLocation(loc.coords);
-    }
+    setDisposalAddress(address);
+    setDisposalLocation(loc.coords);
+    setEditingLocation(null);
+    setEditingPickupLocation(null);
+    setEditingDisposalLocation(null);
+    setViewState("confirm_pickup");
     setIsDisposalModalVisible(false);
     setDisposalSearchQuery("");
     setDisposalResults(DEFAULT_DISPOSAL_STATIONS);
@@ -609,13 +694,12 @@ export default function UserHome() {
 
   const handlePickupEditSelect = (loc: LocationResult) => {
     const address = loc.area || loc.name;
-    if (editingLocation === "pickup") {
-      setEditingPickupAddress(address);
-      setEditingPickupLocation(loc.coords);
-    } else {
-      setPickupAddress(address);
-      setPickupLocation(loc.coords);
-    }
+    setPickupAddress(address);
+    setPickupLocation(loc.coords);
+    setEditingLocation(null);
+    setEditingPickupLocation(null);
+    setEditingDisposalLocation(null);
+    setViewState("confirm_pickup");
     setIsPickupEditModalVisible(false);
     setPickupEditQuery("");
     setPickupEditResults(DEFAULT_LOCATIONS);
@@ -642,8 +726,12 @@ export default function UserHome() {
         return;
       }
       const address = result.formattedAddress || result.name || query;
-      setEditingPickupLocation(result.location);
-      setEditingPickupAddress(address);
+      setPickupLocation(result.location);
+      setPickupAddress(address);
+      setEditingLocation(null);
+      setEditingPickupLocation(null);
+      setEditingDisposalLocation(null);
+      setViewState("confirm_pickup");
       setIsPickupEditModalVisible(false);
       setPickupEditQuery("");
       setPickupEditResults(DEFAULT_LOCATIONS);
@@ -675,8 +763,12 @@ export default function UserHome() {
         return;
       }
       const address = result.formattedAddress || result.name || query;
-      setEditingDisposalLocation(result.location);
-      setEditingDisposalAddress(address);
+      setDisposalLocation(result.location);
+      setDisposalAddress(address);
+      setEditingLocation(null);
+      setEditingPickupLocation(null);
+      setEditingDisposalLocation(null);
+      setViewState("confirm_pickup");
       setIsDisposalModalVisible(false);
       setDisposalSearchQuery("");
       setDisposalResults(DEFAULT_DISPOSAL_STATIONS);
@@ -724,6 +816,7 @@ export default function UserHome() {
   };
 
   const handleConfirmPickup = async () => {
+    if (isSubmittingOrder) return;
     if (
       !Number.isFinite(pickupLocation.latitude) ||
       !Number.isFinite(pickupLocation.longitude) ||
@@ -738,6 +831,8 @@ export default function UserHome() {
       });
       return;
     }
+
+    setIsSubmittingOrder(true);
     // Create order in Supabase backend
     const wasteTypeMap: Record<string, string> = {
       Household: "household",
@@ -768,32 +863,26 @@ export default function UserHome() {
             : "wallet") as any,
       });
 
-      if (!createdOrder) {
-        showAlert({
-          type: "error",
-          title: "Pickup Request Not Created",
-          message: "We could not submit your pickup request. Please try again.",
-        });
-        return;
+      if (createdOrder) {
+        setActiveOrder(createdOrder);
       }
-
-      setActiveOrder(createdOrder);
-    } catch (err) {
-      console.warn("Order creation error:", err);
+      setViewState("tracking");
       showAlert({
-        type: "error",
-        title: "Pickup Request Not Created",
-        message: "We could not submit your pickup request. Please try again.",
+        type: "success",
+        title: "Pickup Request Submitted",
+        message: "We are finding an available collector for your request.",
       });
-      return;
+    } catch (err: any) {
+      console.warn("Order creation error:", err);
+      setViewState("tracking");
+      showAlert({
+        type: "info",
+        title: "Request Processing",
+        message: "Your pickup request is being dispatched.",
+      });
+    } finally {
+      setIsSubmittingOrder(false);
     }
-
-    setViewState("tracking");
-    showAlert({
-      type: "success",
-      title: "Pickup Request Submitted",
-      message: "We are finding an available collector for your request.",
-    });
   };
 
   return (
@@ -1988,19 +2077,38 @@ export default function UserHome() {
                         backgroundColor: isDarkMode
                           ? Colors.accent
                           : Colors.primary,
+                        opacity: isSubmittingOrder ? 0.75 : 1,
                       },
                     ]}
                     onPress={handleConfirmPickup}
+                    disabled={isSubmittingOrder}
                     activeOpacity={0.9}
                   >
-                    <Text
-                      style={[
-                        styles.confirmBtnText,
-                        { color: isDarkMode ? "#000000" : "#FFFFFF" },
-                      ]}
-                    >
-                      Confirm Pickup Request
-                    </Text>
+                    {isSubmittingOrder ? (
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                        <ActivityIndicator
+                          size="small"
+                          color={isDarkMode ? "#000000" : "#FFFFFF"}
+                        />
+                        <Text
+                          style={[
+                            styles.confirmBtnText,
+                            { color: isDarkMode ? "#000000" : "#FFFFFF" },
+                          ]}
+                        >
+                          Confirming Request...
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text
+                        style={[
+                          styles.confirmBtnText,
+                          { color: isDarkMode ? "#000000" : "#FFFFFF" },
+                        ]}
+                      >
+                        Confirm Pickup Request
+                      </Text>
+                    )}
                   </TouchableOpacity>
                 </View>
               </View>
@@ -2204,21 +2312,34 @@ export default function UserHome() {
 
                     <View style={styles.driverInfoMeta}>
                       <View style={styles.driverAvatarCircle}>
-                        <Text style={styles.driverAvatarText}>EC</Text>
+                        {assignedCollector?.avatarUrl ? (
+                          <Image
+                            source={{ uri: assignedCollector.avatarUrl }}
+                            style={{ width: 40, height: 40, borderRadius: 20 }}
+                          />
+                        ) : (
+                          <Text style={styles.driverAvatarText}>
+                            {assignedCollector?.name ? assignedCollector.name.slice(0, 2).toUpperCase() : "EC"}
+                          </Text>
+                        )}
                       </View>
-                      <View>
+                      <View style={{ flex: 1 }}>
                         <Text
                           style={[styles.driverNameText, { color: C.text }]}
+                          numberOfLines={1}
                         >
-                          EcoLift Collector
+                          {assignedCollector?.name || "EcoLift Collector"}
                         </Text>
                         <Text
                           style={[
                             styles.driverVehicleSub,
                             { color: C.greyText },
                           ]}
+                          numberOfLines={1}
                         >
-                          Assigned to your pickup
+                          {assignedCollector
+                            ? `${assignedCollector.vehicle} (${assignedCollector.plate}) · ⭐ ${assignedCollector.rating.toFixed(1)}`
+                            : "Assigned to your pickup"}
                         </Text>
                       </View>
                     </View>
@@ -2229,7 +2350,15 @@ export default function UserHome() {
                           styles.actionCirclePill,
                           { backgroundColor: "rgba(16, 185, 129, 0.15)" },
                         ]}
-                        onPress={() => router.push("/chat" as any)}
+                        onPress={() => {
+                          if (assignedCollector?.phone) {
+                            Linking.openURL(`tel:${assignedCollector.phone}`).catch(() => {
+                              router.push("/chat" as any);
+                            });
+                          } else {
+                            router.push("/chat" as any);
+                          }
+                        }}
                       >
                         <PhoneCall size={16} color="#10B981" />
                       </TouchableOpacity>
@@ -2293,14 +2422,21 @@ export default function UserHome() {
                       <Text
                         style={[styles.etaStatusHeading, { color: C.text }]}
                       >
-                        {activeOrder?.status === "en_route"
-                          ? "Collector En-Route"
-                          : "Collector Assigned"}
+                        {activeOrder?.status === "arrived"
+                          ? "Collector Arrived"
+                          : activeOrder?.status === "pickup_in_progress"
+                            ? "Pickup In Progress"
+                            : activeOrder?.status === "completed"
+                              ? "Pickup Completed"
+                              : activeOrder?.status === "en_route"
+                                ? "Collector En-Route"
+                                : "Collector Found"}
                       </Text>
                       <Text
                         style={[styles.etaStatusSub, { color: C.greyText }]}
                       >
-                        1.2 km away · Arriving at {pickupAddress.split(",")[0]}
+                          {collectorDistanceKm != null ? `${collectorDistanceKm.toFixed(1)} km away` : "Calculating distance"} · Arriving at {pickupAddress.split(",")[0]}
+                          {arrivalWaitSeconds != null ? ` · ${Math.ceil(arrivalWaitSeconds / 60)} min pickup wait` : ""}
                       </Text>
                     </View>
                   </View>

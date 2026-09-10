@@ -6,3 +6,4 @@ export * from "./orders";
 export * from "./profile";
 export * from "./schedules";
 export * from "./wallet";
+export { setOrderEnRoute } from "./orders";
